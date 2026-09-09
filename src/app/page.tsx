@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ProvenanceTag } from "@/components/ProvenanceTag";
 import { LaunchCountdown } from "@/components/LaunchCountdown";
 import { Reveal } from "@/components/Reveal";
+import { VicePlayground } from "@/components/VicePlayground";
 import { SiteFooter, SiteNav } from "@/components/landing/Chrome";
 import { HeroTerminal } from "@/components/landing/HeroTerminal";
 import { ButtonLink, Panel } from "@/components/ui/primitives";
@@ -39,12 +40,28 @@ export default function LandingPage() {
 function Hero() {
   return (
     <section className="relative overflow-hidden border-b border-line">
-      <div className="grid-field pointer-events-none absolute inset-0" aria-hidden />
-      <div
-        className="pointer-events-none absolute -top-40 left-1/4 h-[520px] w-[520px] rounded-full opacity-40 blur-[130px]"
-        style={{ background: "radial-gradient(circle, #4a1044, transparent 70%)" }}
-        aria-hidden
-      />
+      {/* Real 3D backdrop. Decorative, inert, and it stops when off screen. */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <VicePlayground className="h-full w-full" />
+        {/*
+          Contrast is bought locally rather than by dimming the whole scene: a
+          soft pool behind the headline column, and a fade where the section
+          meets the next one. The right half of the frame stays bright.
+        */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(90deg, rgb(6 4 11 / 0.96) 0%, rgb(6 4 11 / 0.88) 26%, rgb(6 4 11 / 0.55) 48%, rgb(6 4 11 / 0.15) 72%, transparent 100%)",
+          }}
+        />
+        <div
+          className="absolute inset-x-0 bottom-0 h-40"
+          style={{
+            background: "linear-gradient(to top, var(--color-ground), transparent)",
+          }}
+        />
+      </div>
 
       <div className="relative mx-auto grid min-h-[calc(100dvh-4rem)] max-w-[1400px] items-center gap-12 px-4 pt-16 pb-20 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16 lg:pt-24">
         <div>
@@ -59,7 +76,16 @@ function Hero() {
             faster and stay ahead in GTA 6.
           </p>
 
-          <div className="mt-9 flex flex-wrap items-center gap-3">
+          {/*
+            The clock sits above the fold on purpose. It is the single thing
+            every visitor to a pre-launch site wants, and burying it below a
+            scroll would be the wrong call however tidy it looks.
+          */}
+          <div className="mt-8">
+            <LaunchCountdown />
+          </div>
+
+          <div className="mt-8 flex flex-wrap items-center gap-3">
             <ButtonLink href="/register" size="lg">
               Start free
             </ButtonLink>
@@ -77,13 +103,58 @@ function Hero() {
   );
 }
 
+/**
+ * Stat tiles sitting over the 3D scene.
+ *
+ * Every figure is computed at render time from the dataset, so these move when
+ * the data does. None of them is a marketing number: there is no user count
+ * and no satisfaction percentage, because this has not launched and inventing
+ * either would be the exact dishonesty the product exists to avoid.
+ */
+function HeroStats() {
+  const best = sortMissions(MISSIONS, "best-hourly")[0];
+  const fastest = ASSETS.filter((a) => a.dailyNet > 0).sort(
+    (a, b) => (paybackDays(a) ?? 1e9) - (paybackDays(b) ?? 1e9),
+  )[0];
+
+  const tiles = [
+    {
+      label: "Best rate tracked",
+      value: `${moneyShort(effectiveHourly(best))}/h`,
+      foot: best.name,
+    },
+    {
+      label: "Fastest payback",
+      value: `${paybackDays(fastest)?.toFixed(1)}d`,
+      foot: fastest.name,
+    },
+    {
+      label: "Missions analysed",
+      value: String(MISSIONS.length),
+      foot: `${ASSETS.length} assets tracked`,
+    },
+  ];
+
+  return (
+    <dl className="grid max-w-xl grid-cols-3 gap-px overflow-hidden rounded-[14px] border border-line/80 bg-line/60 backdrop-blur-md">
+      {tiles.map((t) => (
+        <div key={t.label} className="bg-surface/70 px-4 py-3.5">
+          <dt className="text-[10px] tracking-wide text-ink-faint">{t.label}</dt>
+          <dd className="tabular mt-1 text-lg leading-none text-ink">{t.value}</dd>
+          <dd className="mt-1.5 truncate text-[11px] text-ink-faint">{t.foot}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 /* 2. Countdown band ------------------------------------------------------- */
 
 function Countdown() {
   return (
     <section className="border-b border-line bg-surface">
       <div className="mx-auto flex max-w-[1400px] flex-wrap items-end justify-between gap-10 px-4 py-14 sm:px-8">
-        <LaunchCountdown />
+        <HeroStats />
 
         <div className="max-w-[38ch]">
           <h2 className="text-lg leading-snug font-medium text-ink">

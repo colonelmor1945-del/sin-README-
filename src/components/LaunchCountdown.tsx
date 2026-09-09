@@ -60,11 +60,18 @@ export function LaunchCountdown({
         <ProvenanceTag value={LAUNCH.provenance} size="xs" />
       </div>
 
-      <div className="mt-4 flex gap-2 sm:gap-3" role="timer" aria-live="off">
-        <Unit label="Days" value={value?.days} width="w-[92px] sm:w-[112px]" />
-        <Unit label="Hours" value={value?.hours} pad />
-        <Unit label="Minutes" value={value?.minutes} pad />
-        <Unit label="Seconds" value={value?.seconds} pad accent />
+      <div
+        className="mt-6 flex items-start gap-2 sm:gap-4"
+        role="timer"
+        aria-live="off"
+      >
+        <Unit label="Days" value={value?.days} big />
+        <Colon />
+        <Unit label="Hours" value={value?.hours} pad big />
+        <Colon />
+        <Unit label="Minutes" value={value?.minutes} pad big />
+        <Colon />
+        <Unit label="Seconds" value={value?.seconds} pad big ticking />
       </div>
 
       <p className="mt-4 max-w-[62ch] text-[12px] leading-relaxed text-ink-faint">
@@ -73,58 +80,117 @@ export function LaunchCountdown({
             <span className="text-ink-muted">
               Rockstar has not confirmed this date.
             </span>{" "}
-            {LAUNCH.source}. This project has shown{" "}
-            {LAUNCH.history.length} earlier date
+            {LAUNCH.source}. This project has shown {LAUNCH.history.length}{" "}
+            earlier date
             {LAUNCH.history.length === 1 ? "" : "s"} that turned out to be
             wrong, so treat the clock as a guide and not a promise.
           </>
         ) : (
-          <>Confirmed by {LAUNCH.source}.</>
+          <>
+            <span className="text-ink-muted">Confirmed by Rockstar.</span>{" "}
+            {LAUNCH.sourceUrl ? (
+              <a
+                href={LAUNCH.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent underline-offset-2 hover:underline"
+              >
+                Read the announcement
+              </a>
+            ) : (
+              LAUNCH.source
+            )}
+            . The date has moved {LAUNCH.history.length - 1} times before, so a
+            third move would not be a surprise.
+          </>
         )}
       </p>
     </div>
   );
 }
 
+/**
+ * One unit of the clock.
+ *
+ * The digits carry the sunset ramp as a gradient fill with a soft bloom
+ * underneath, which is where nearly all of the visual weight comes from. The
+ * seconds column pulses so the whole thing reads as live rather than printed.
+ */
 function Unit({
   label,
   value,
   pad: shouldPad,
-  accent,
-  width = "w-[72px] sm:w-[88px]",
+  big,
+  ticking,
 }: {
   label: string;
   value: number | undefined;
   pad?: boolean;
-  accent?: boolean;
-  width?: string;
+  big?: boolean;
+  ticking?: boolean;
 }) {
   const display =
     value === undefined ? "--" : shouldPad ? pad(value) : String(value);
 
   return (
-    <div
-      className={cx(
-        "panel-quiet flex flex-col items-center justify-center px-2 py-3 sm:py-4",
-        width,
-      )}
-    >
-      <span
-        className={cx(
-          "tabular text-2xl leading-none sm:text-3xl",
-          value === undefined
-            ? "text-ink-faint"
-            : accent
-              ? "text-accent"
-              : "text-ink",
-        )}
-      >
-        {display}
+    <div className="flex flex-col items-center">
+      <span className="relative block">
+        {/* Bloom. Purely decorative, and hidden from the accessibility tree. */}
+        <span
+          aria-hidden
+          className={cx(
+            "pointer-events-none absolute inset-0 select-none blur-[26px] opacity-80",
+            big ? "text-6xl sm:text-7xl lg:text-8xl" : "text-3xl",
+            "tabular leading-none font-semibold tracking-tight",
+          )}
+          style={{
+            background:
+              "linear-gradient(165deg, #ff2d78 0%, #c657ff 60%, #ffa64d 100%)",
+            WebkitBackgroundClip: "text",
+            backgroundClip: "text",
+            color: "transparent",
+          }}
+        >
+          {display}
+        </span>
+
+        <span
+          className={cx(
+            "tabular relative block leading-none font-semibold tracking-tight",
+            big ? "text-6xl sm:text-7xl lg:text-8xl" : "text-3xl",
+            ticking && "animate-[pulse_1s_ease-in-out_infinite]",
+          )}
+          style={
+            value === undefined
+              ? { color: "var(--color-ink-faint)" }
+              : {
+                  background:
+                    "linear-gradient(165deg, #ffffff 0%, #ffd6e6 18%, #ff4d92 52%, #c657ff 82%, #ffa64d 100%)",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  color: "transparent",
+                }
+          }
+        >
+          {display}
+        </span>
       </span>
-      <span className="mt-1.5 text-[10px] tracking-wide text-ink-faint uppercase">
+
+      <span className="mt-2 text-[10px] tracking-[0.2em] text-ink-faint uppercase">
         {label}
       </span>
     </div>
+  );
+}
+
+function Colon() {
+  return (
+    <span
+      aria-hidden
+      className="tabular mt-1 text-4xl leading-none font-semibold text-accent/30 select-none sm:mt-3 sm:text-6xl lg:text-7xl"
+    >
+      :
+    </span>
   );
 }
 

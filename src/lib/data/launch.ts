@@ -29,21 +29,26 @@ export interface LaunchTarget {
 }
 
 export const LAUNCH: LaunchTarget = {
-  // PLACEHOLDER. Replace with the confirmed date and flip provenance to
-  // "verified" once there is an official announcement to cite.
   target: "2026-11-19T00:00:00-05:00",
-  provenance: "community",
-  source: "Widely reported window, not an official announcement",
+  provenance: "verified",
+  source: "Rockstar Games Newswire",
+  sourceUrl:
+    "https://www.rockstargames.com/newswire/article/ak3ak31a49a221/grand-theft-auto-vi-is-now-set-to-launch-november-19-2026",
   history: [
     {
-      date: "2025-10-??",
+      date: "2025",
       announcedOn: "2023",
       note: "First window given at announcement.",
     },
     {
       date: "2026-05-26",
       announcedOn: "2025",
-      note: "Moved back. First confirmed delay.",
+      note: "First delay.",
+    },
+    {
+      date: "2026-11-19",
+      announcedOn: "November 2025",
+      note: "Second delay, six months, for extra polish. The current date.",
     },
   ],
 };
