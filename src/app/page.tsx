@@ -52,7 +52,7 @@ function Hero() {
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(90deg, rgb(6 4 11 / 0.96) 0%, rgb(6 4 11 / 0.88) 26%, rgb(6 4 11 / 0.55) 48%, rgb(6 4 11 / 0.15) 72%, transparent 100%)",
+              "linear-gradient(90deg, rgb(6 4 11 / 0.97) 0%, rgb(6 4 11 / 0.93) 30%, rgb(6 4 11 / 0.70) 52%, rgb(6 4 11 / 0.28) 76%, rgb(6 4 11 / 0.10) 100%)",
           }}
         />
         <div

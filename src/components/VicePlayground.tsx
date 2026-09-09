@@ -52,10 +52,55 @@ const vec3 CYAN    = vec3(0.310, 0.640, 1.000);  // sky blue
 const vec3 VIOLET  = vec3(0.480, 0.130, 0.720);  // electric purple
 const vec3 AMBER   = vec3(1.000, 0.620, 0.230);  // low sun
 
+// Pastel dusk ramp, sampled from the horizon upward.
+const vec3 SKY_AMBER = vec3(1.000, 0.808, 0.510);
+const vec3 SKY_CORAL = vec3(0.988, 0.596, 0.522);
+const vec3 SKY_PINK  = vec3(0.902, 0.541, 0.702);
+const vec3 SKY_LILAC = vec3(0.647, 0.514, 0.812);
+const vec3 SKY_BLUE  = vec3(0.416, 0.494, 0.729);
+const vec3 SUN_CORE  = vec3(1.000, 0.914, 0.706);
+const vec3 CLOUD_LIT = vec3(1.000, 0.741, 0.686);
+const vec3 CLOUD_COOL= vec3(0.612, 0.494, 0.702);
+const vec3 BIRD      = vec3(0.290, 0.220, 0.380);
+// Palms recede toward the sky colour rather than toward black.
+const vec3 PALM_FAR  = vec3(0.612, 0.482, 0.706);
+const vec3 PALM_MID  = vec3(0.404, 0.278, 0.518);
+const vec3 PALM_NEAR = vec3(0.216, 0.129, 0.302);
+
 float hash21(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
   p += dot(p, p + 45.32);
   return fract(p.x * p.y);
+}
+
+// Value noise, smoothstep-interpolated so the derivative is continuous.
+float noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash21(i);
+  float b = hash21(i + vec2(1.0, 0.0));
+  float c = hash21(i + vec2(0.0, 1.0));
+  float d = hash21(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+/**
+ * Fractal brownian motion. Five octaves is where the cloud edges stop reading
+ * as noise and start reading as weather; a sixth costs frames and adds detail
+ * nobody sees behind a headline.
+ */
+float fbm(vec2 p) {
+  float sum = 0.0;
+  float amp = 0.5;
+  // Rotate between octaves so the layers do not line up into a visible grid.
+  mat2 rot = mat2(0.80, 0.60, -0.60, 0.80);
+  for (int i = 0; i < 5; i++) {
+    sum += amp * noise(p);
+    p = rot * p * 2.02;
+    amp *= 0.5;
+  }
+  return sum;
 }
 
 // Distance to the nearest line of a unit grid, screen-space antialiased.
@@ -72,7 +117,7 @@ float blockHeight(vec2 cell) {
   if (road < 0.5) return 0.0;
   float h = hash21(cell);
   // Skyline profile: taller towers away from the centre avenue.
-  return mix(0.25, 1.9, h * h) * (0.6 + 0.5 * smoothstep(1.0, 7.0, abs(cell.x)));
+  return mix(0.30, 2.8, h * h) * (0.6 + 0.5 * smoothstep(1.0, 7.0, abs(cell.x)));
 }
 
 /**
@@ -108,23 +153,24 @@ vec3 city(vec3 ro, vec3 rd, out float hitDist) {
 
         // Facade. Window rows and columns, some lit, some dark.
         vec2 face = xWall ? vec2(hitP.z, hitP.y) : vec2(hitP.x, hitP.y);
-        vec2 win = floor(face * vec2(6.0, 9.0));
-        float lit = step(0.62, hash21(win + pos * 7.1));
+        vec2 win = floor(face * vec2(11.0, 16.0));
+        float lit = step(0.74, hash21(win + pos * 7.1));
         // A few windows flicker, on their own slow offset.
         lit *= step(0.15, fract(hash21(win) * 9.7 + uTime * 0.08));
 
-        vec3 neon = mix(CYAN, ACCENT, hash21(pos * 3.7));
-        col = neon * lit * 1.30;
+        // Facade in the palm range, the sunlit side a shade warmer.
+        col = mix(PALM_MID, PALM_FAR, xWall ? 0.55 : 0.30);
 
-        // Thin rim so the edges catch the sunset, and almost nothing else.
-        col += neon * (xWall ? 0.03 : 0.06);
-        col += VIOLET * 0.015;
+        // Warm interior lights, and a cooler neon sign on a few blocks.
+        vec3 lamp = mix(vec3(1.00, 0.82, 0.52), ACCENT, step(0.82, hash21(pos * 3.7)));
+        col += lamp * lit * 0.55;
 
-        // Roof beacon on the tallest towers.
-        if (h > 2.2 && abs(y - h) < 0.02) col += ACCENT * 1.4;
+        // Rooftop edge catching the last of the sun.
+        if (abs(y - h) < 0.015) col += SUN_CORE * 0.30;
 
-        // Depth haze toward the horizon.
-        col = mix(col, GROUND * 0.5, smoothstep(4.0, 20.0, t));
+        // Aerial perspective. Distant blocks wash out toward the sky rather
+        // than toward black, which is what makes the haze read as air.
+        col = mix(col, SKY_PINK * 0.92, smoothstep(6.0, 44.0, t));
         return col;
       }
     }
@@ -177,45 +223,72 @@ float palmRow(vec2 p, float depth, float spacing, float scale) {
   return palm(q / s, id + depth * 17.0);
 }
 
-// The sky, sun and stars. Also used as the reflection seen in the wet ground.
+// The sky, sun and clouds. Also used as the reflection seen in the wet street.
 vec3 sky(vec3 rd, float t) {
   vec2 p = vec2(rd.x, rd.y) / max(rd.z * -1.0, 0.35);
 
-  // Sunset ramp: violet high, magenta mid, amber at the waterline.
-  vec3 col = mix(GROUND, VIOLET * 0.55, smoothstep(1.10, 0.10, p.y));
-  col = mix(col, ACCENT * 0.42, smoothstep(0.55, 0.02, p.y));
-  col = mix(col, AMBER * 0.30, smoothstep(0.22, -0.06, p.y));
+  /*
+   * Pastel dusk ramp, bottom to top: warm amber at the waterline, coral, then
+   * pink, lilac, and a cool blue at the top of the frame. This is the palette
+   * every Florida-at-sunset illustration lands on, and it is the reason the
+   * scene reads as evening rather than as a neon nightclub.
+   */
+  vec3 col = SKY_AMBER;
+  col = mix(col, SKY_CORAL,  smoothstep(-0.10, 0.16, p.y));
+  col = mix(col, SKY_PINK,   smoothstep( 0.08, 0.38, p.y));
+  col = mix(col, SKY_LILAC,  smoothstep( 0.30, 0.70, p.y));
+  col = mix(col, SKY_BLUE,   smoothstep( 0.60, 1.15, p.y));
 
-  // Stars, only well above the horizon.
-  vec2 sc = floor(p * 90.0);
-  float star = step(0.995, hash21(sc)) * smoothstep(0.05, 0.5, p.y);
-  col += vec3(0.8, 0.85, 1.0) * star * (0.5 + 0.5 * sin(uTime * 2.0 + hash21(sc) * 30.0));
+  // Sun. Low, large and soft, sitting just above the horizon line.
+  vec2 sunP = p - vec2(0.0, 0.06);
+  float d = length(sunP * vec2(1.0, 1.15));
+  col += SUN_CORE * smoothstep(0.30, 0.26, d) * 0.85;
+  // Two-stage bloom: a tight halo and a wide wash across the whole sky.
+  col += SUN_CORE * exp(-d * 5.0) * 0.45;
+  col += SKY_CORAL * exp(-d * 1.5) * 0.30;
 
-  // Sun, with the horizontal band cuts.
-  vec2 sunP = p - vec2(0.0, 0.10);
-  float d = length(sunP * vec2(1.0, 1.25));
-  float disc = smoothstep(0.34, 0.325, d);
-  float bands = step(0.42, fract(sunP.y * 30.0 + 0.5));
-  bands = mix(1.0, bands, smoothstep(0.14, -0.10, sunP.y));
-  vec3 sunCol = mix(AMBER, ACCENT, smoothstep(-0.25, 0.30, sunP.y));
-  col += sunCol * disc * bands * 1.25;
+  /*
+   * Clouds. Stretched horizontally so they band the way real dusk cloud does,
+   * lit from below by the sun and cooling toward the top of the frame. The
+   * drift is slow enough that it registers as weather, not as a scrolling
+   * texture.
+   */
+  vec2 cp = vec2(p.x * 1.4 + uTime * 0.020, p.y * 3.6 - uTime * 0.004);
+  float cloud = fbm(cp * 2.0);
+  // Bias the coverage so the sky is not uniformly overcast.
+  cloud = smoothstep(0.42, 0.86, cloud);
+  // Thin the cloud out at the very bottom so it does not fog the horizon.
+  cloud *= smoothstep(-0.06, 0.14, p.y) * smoothstep(1.30, 0.55, p.y);
 
-  // Two-stage bloom, tight core and wide haze.
-  col += ACCENT * exp(-d * 4.5) * 0.35;
-  col += VIOLET * exp(-d * 1.6) * 0.16;
+  // Underlit near the sun, cool and violet away from it.
+  vec3 cloudCol = mix(CLOUD_COOL, CLOUD_LIT, exp(-d * 1.9));
+  col = mix(col, cloudCol, cloud * 0.72);
 
-  // Drifting cloud bands, cut into strips so they read as neon slats.
-  float cl = sin(p.x * 2.4 + uTime * 0.10) * 0.5 + 0.5;
-  cl *= smoothstep(0.42, 0.10, abs(p.y - 0.30));
-  col += mix(VIOLET, ACCENT, cl) * cl * 0.12;
+  // A brighter rim where the sun catches the underside of the cloud bank.
+  float rim = smoothstep(0.55, 0.90, fbm(cp * 2.0 + vec2(0.0, 0.35)));
+  col += SUN_CORE * rim * cloud * exp(-d * 2.2) * 0.35;
 
-  // Two rows of palms against the sunset. The far row is hazed toward the
-  // sky colour, the near row reads almost black, which is what sells depth.
-  float far = palmRow(p - vec2(0.0, -0.02), 2.2, 0.62, 0.30);
-  col = mix(col, mix(col, VIOLET * 0.25, 0.85), far);
+  // Birds. Three of them, far off, because an empty sky reads as unfinished.
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    vec2 bp = p - vec2(-0.42 + fi * 0.11 + sin(uTime * 0.05 + fi) * 0.02,
+                        0.44 + fi * 0.045 + sin(uTime * 0.7 + fi * 2.0) * 0.006);
+    // A shallow V, drawn as distance to two mirrored segments.
+    float wing = abs(bp.y * 3.0) - abs(bp.x) * 0.9;
+    float bird = smoothstep(0.010, 0.002, abs(wing)) * step(abs(bp.x), 0.016);
+    col = mix(col, BIRD, bird * 0.55);
+  }
 
-  float near = palmRow(p * 0.72 - vec2(0.31, -0.06), 1.0, 0.85, 0.46);
-  col = mix(col, GROUND * 0.6, near);
+  // Palms. Three depths: hazed at the back, near-solid at the front. The
+  // parallax between the rows is what gives the horizon its depth.
+  float back = palmRow(p * 1.25 - vec2(0.10, -0.02), 2.6, 0.58, 0.26);
+  col = mix(col, mix(col, PALM_FAR, 0.72), back);
+
+  float mid = palmRow(p * 0.95 - vec2(0.44, -0.05), 1.7, 0.78, 0.40);
+  col = mix(col, PALM_MID, mid * 0.88);
+
+  float front = palmRow(p * 0.66 - vec2(0.17, -0.10), 1.0, 1.10, 0.62);
+  col = mix(col, PALM_NEAR, front);
 
   return col;
 }
@@ -250,40 +323,43 @@ void main() {
     float line = gridLine(cell, 1.8);
     float fade = exp(-td * 0.10);
 
-    vec3 gridCol = mix(CYAN, ACCENT, smoothstep(0.0, 10.0, td));
-    colour = gridCol * line * fade * 1.15;
+    // Wet asphalt, tinted by the sky it is reflecting.
+    colour = mix(vec3(0.14, 0.10, 0.19), vec3(0.30, 0.20, 0.34), fade);
+    vec3 gridCol = mix(SKY_AMBER, ACCENT, smoothstep(0.0, 9.0, td));
+    colour += gridCol * line * fade * 0.55;
 
     // Reflection, wobbled so the street reads as wet rather than as a mirror.
     vec3 refl = reflect(rd, vec3(0.0, 1.0, 0.0));
     refl.x += sin(hit.z * 3.0 + t * 1.4) * 0.012;
-    colour += sky(refl, td) * 0.30 * fade;
+    colour += sky(refl, td) * 0.55 * fade;
 
-    // Ambient wash and a scanline crawl over the tarmac.
-    colour += VIOLET * fade * 0.10;
+    // Ambient wash from the sky bouncing off the road.
+    colour += SKY_CORAL * fade * 0.10;
     colour *= 0.92 + 0.08 * sin(hit.z * 8.0 + t * 3.0);
   } else {
     colour = sky(rd, 0.0);
 
     float cityDist;
-    vec3 buildings = city(ro, rd, cityDist);
+    vec3 buildings = city(ro * 3.4, rd, cityDist);
     if (cityDist > 0.0) {
       // Buildings sit in front of the sky, keeping a little glow bleeding
       // through so the skyline stays lit from behind.
-      colour = mix(colour * 0.25, colour * 0.25 + buildings, 0.95);
+      colour = buildings;
     }
   }
 
   // Neon haze pulling everything together, then vignette.
-  colour += ACCENT * 0.03;
-  colour *= 1.0 - 0.34 * length(uv * vec2(0.6, 0.9));
+  colour += SKY_CORAL * 0.015;
+  colour *= 1.0 - 0.26 * length(uv * vec2(0.6, 0.9));
 
   // Exposure. The scene sits behind body copy, so it is lifted here rather
   // than by stacking another translucent panel over the top of it.
-  colour *= 1.05;
+  colour *= 1.02;
 
   // Filmic-ish rolloff so the neon clips gracefully instead of turning white.
-  colour = colour / (colour + 0.90);
-  colour = pow(colour, vec3(0.80));
+  // Gentle shoulder only. A hard tonemap turns pastels chalky.
+  colour = colour / (colour + 1.35) * 1.85;
+  colour = pow(colour, vec3(0.95));
 
   // Dither, to stop the gradients banding across a wide panel.
   float dither = fract(sin(dot(frag, vec2(12.9898, 78.233))) * 43758.5453);

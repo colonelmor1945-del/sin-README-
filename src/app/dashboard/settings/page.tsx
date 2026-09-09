@@ -53,10 +53,8 @@ export default async function SettingsPage() {
                       {tier.priceMinor === 0 ? "Free" : price(tier.priceMinor / 100)}
                     </p>
                     <p className="mt-0.5 text-[11px] text-ink-faint">
-                      {tier.dailyQueries === "unlimited"
-                        ? "Unlimited queries"
-                        : `${tier.dailyQueries} queries a day`}
-                      , {tier.monthlyCredits} credits
+                      {tier.dailyQueries} queries a day, {tier.monthlyCredits}{" "}
+                      credits
                     </p>
                     <ul className="mt-4 space-y-1.5">
                       {tier.features.map((f) => (

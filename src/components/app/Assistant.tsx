@@ -68,9 +68,7 @@ export function Assistant({
       const rawLimit = response.headers.get("x-queries-limit");
       if (Number.isFinite(used) && rawLimit) {
         setNote(
-          rawLimit === "unlimited"
-            ? `Running on ${providerLabel}. Answers are AI projections drawn from placeholder data, so check them before you spend.`
-            : `${Math.max(0, Number(rawLimit) - used)} of ${rawLimit} free queries left today. Running on ${providerLabel}. Answers are AI projections drawn from placeholder data.`,
+          `${Math.max(0, Number(rawLimit) - used)} of ${rawLimit} queries left today. Running on ${providerLabel}. Answers are AI projections drawn from placeholder data.`,
         );
       }
 

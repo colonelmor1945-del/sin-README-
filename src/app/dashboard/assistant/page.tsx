@@ -13,10 +13,7 @@ export default async function AssistantPage() {
   const limit = TIERS[account.tier].dailyQueries;
   const provider = getAiProvider();
 
-  const quotaNote =
-    limit === "unlimited"
-      ? `Running on ${provider.label}. Answers are AI projections drawn from placeholder data, so check them before you spend.`
-      : `${Math.max(0, limit - used)} of ${limit} free queries left today. Running on ${provider.label}. Answers are AI projections drawn from placeholder data.`;
+  const quotaNote = `${Math.max(0, limit - used)} of ${limit} queries left today. Running on ${provider.label}. Answers are AI projections drawn from placeholder data.`;
 
   return (
     <div className="flex h-[calc(100dvh-0px)] flex-col lg:h-[100dvh]">

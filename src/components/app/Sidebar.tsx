@@ -10,6 +10,7 @@ import {
   Lightning,
   MapTrifold,
   Newspaper,
+  PlayCircle,
   Path,
   Robot,
   Target,
@@ -32,6 +33,7 @@ const NAV = [
   { href: "/dashboard/economy", label: "Economy tracker", icon: ChartLineUp },
   { href: "/dashboard/creator", label: "Creator Lab", icon: VideoCamera },
   { href: "/dashboard/news", label: "Intel feed", icon: Newspaper },
+  { href: "/dashboard/feed", label: "Community feed", icon: PlayCircle },
   { href: "/fund", label: "Fund the Lab", icon: Lightning },
 ] as const;
 

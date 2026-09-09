@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getStore } from "@/lib/db/store";
+import { PRICING } from "@/lib/pricing";
 import type { Tier } from "@/lib/types";
 
 /**
@@ -10,54 +11,23 @@ import type { Tier } from "@/lib/types";
  * database. The client is told what it may show, never what it may do.
  */
 
+/**
+ * Re-exported for the surfaces that only need the label, the cap and the
+ * feature list. Prices and discounts live in src/lib/pricing.ts.
+ */
 export const TIERS: Record<
   Tier,
   {
     label: string;
     priceMinor: number;
-    dailyQueries: number | "unlimited";
+    dailyQueries: number;
     features: string[];
     monthlyCredits: number;
   }
 > = {
-  free: {
-    label: "Free",
-    priceMinor: 0,
-    dailyQueries: 5,
-    monthlyCredits: 5,
-    features: [
-      "5 AI queries a day",
-      "Money calculator",
-      "Mission list, basic fields",
-      "Map, missions layer only",
-    ],
-  },
-  pro: {
-    label: "Pro",
-    priceMinor: 499,
-    dailyQueries: "unlimited",
-    monthlyCredits: 60,
-    features: [
-      "Unlimited AI queries",
-      "Personalised money plans",
-      "Full mission intelligence",
-      "Economy tracker",
-      "All map layers and filters",
-    ],
-  },
-  elite: {
-    label: "Elite",
-    priceMinor: 999,
-    dailyQueries: "unlimited",
-    monthlyCredits: 200,
-    features: [
-      "Everything in Pro",
-      "Creator Lab",
-      "Wealth and portfolio tracking",
-      "Investment alerts",
-      "Priority model effort",
-    ],
-  },
+  free: { ...PRICING.free, priceMinor: PRICING.free.monthlyMinor },
+  pro: { ...PRICING.pro, priceMinor: PRICING.pro.monthlyMinor },
+  elite: { ...PRICING.elite, priceMinor: PRICING.elite.monthlyMinor },
 };
 
 export type Capability =
@@ -84,7 +54,7 @@ export function can(tier: Tier, capability: Capability): boolean {
 export interface QuotaResult {
   allowed: boolean;
   used: number;
-  limit: number | "unlimited";
+  limit: number;
   reason?: "daily-limit" | "insufficient-credits" | "tier";
 }
 
@@ -92,11 +62,6 @@ export interface QuotaResult {
 export async function consumeQuery(userId: string, tier: Tier): Promise<QuotaResult> {
   const limit = TIERS[tier].dailyQueries;
   const store = getStore();
-
-  if (limit === "unlimited") {
-    const used = await store.bumpDailyQueries(userId);
-    return { allowed: true, used, limit };
-  }
 
   const used = await store.getDailyQueries(userId);
   if (used >= limit) {
