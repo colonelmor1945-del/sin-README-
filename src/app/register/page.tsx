@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 
 import { AuthForm } from "@/components/auth/AuthForm";
+import { GoogleButton } from "@/components/auth/GoogleButton";
 import { Brand } from "@/components/Brand";
 import { register } from "@/lib/auth/actions";
+import { googleConfigured } from "@/lib/auth/google";
 import { getSession } from "@/lib/auth/session";
 import { SIGNUP_CREDITS } from "@/lib/db/store";
 
@@ -32,8 +34,9 @@ export default async function RegisterPage() {
           Five AI queries a day and {SIGNUP_CREDITS} Lab Credits to begin. No card.
         </p>
 
-        <div className="panel p-6">
+        <div className="panel space-y-5 p-6">
           <AuthForm mode="register" action={register} />
+          <GoogleButton configured={googleConfigured()} />
         </div>
 
         <p className="mt-6 text-center text-[11px] leading-relaxed text-ink-faint">

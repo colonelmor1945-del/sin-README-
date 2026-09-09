@@ -1,9 +1,11 @@
 import { ArrowSquareOut, ChatCircle, ArrowFatUp } from "@phosphor-icons/react/dist/ssr";
 
 import { PageHeader } from "@/components/app/PageHeader";
+import { DiscordPanel } from "@/components/app/DiscordPanel";
 import { ShortsFeed } from "@/components/app/ShortsFeed";
 import { Panel, PanelHead, cx } from "@/components/ui/primitives";
 import { requireSession } from "@/lib/auth/session";
+import { fetchDiscordWidget } from "@/lib/social/discord";
 import { fetchReddit, timeAgo } from "@/lib/social/reddit";
 import { fetchShorts } from "@/lib/social/youtube";
 
@@ -13,9 +15,10 @@ export default async function FeedPage() {
   await requireSession();
 
   // Both sources are cached on the server, so this costs nothing per visitor.
-  const [shorts, posts] = await Promise.all([
+  const [shorts, reddit, discord] = await Promise.all([
     fetchShorts({}),
     fetchReddit({ subreddit: "GTA6", sort: "hot", limit: 14 }),
+    fetchDiscordWidget(),
   ]);
 
   return (
@@ -31,19 +34,32 @@ export default async function FeedPage() {
         </div>
 
         <aside className="space-y-4">
+          <DiscordPanel
+            widget={discord}
+            fallbackInvite={process.env.NEXT_PUBLIC_DISCORD_INVITE}
+          />
+
           <Panel>
             <PanelHead
               title="Reddit"
               meta={<span className="text-[11px] text-ink-faint">r/GTA6, hot</span>}
             />
-            {posts.length === 0 ? (
+            {reddit.unconfigured ? (
+              <p className="px-5 py-10 text-center text-[13px] leading-relaxed text-ink-muted">
+                Reddit closed public access to its listings, so this needs an
+                app. Register one at reddit.com/prefs/apps as type script and
+                set <span className="tabular text-ink">REDDIT_CLIENT_ID</span>{" "}
+                and <span className="tabular text-ink">REDDIT_CLIENT_SECRET</span>.
+                It is free.
+              </p>
+            ) : reddit.posts.length === 0 ? (
               <p className="px-5 py-10 text-center text-[13px] text-ink-muted">
                 Reddit did not answer. It rate limits hard, so this usually
                 clears on its own.
               </p>
             ) : (
               <ul className="divide-y divide-line/70">
-                {posts.map((post) => (
+                {reddit.posts.map((post) => (
                   <li key={post.id} className="px-5 py-3.5">
                     <a
                       href={post.permalink}

@@ -1,15 +1,32 @@
 import { redirect } from "next/navigation";
 
 import { AuthForm } from "@/components/auth/AuthForm";
+import { GoogleButton } from "@/components/auth/GoogleButton";
 import { Brand } from "@/components/Brand";
 import { LaunchCountdown } from "@/components/LaunchCountdown";
 import { login } from "@/lib/auth/actions";
+import { googleConfigured } from "@/lib/auth/google";
 import { getSession } from "@/lib/auth/session";
+
+const OAUTH_ERRORS: Record<string, string> = {
+  "google-unconfigured": "Google sign-in is not configured on this deployment.",
+  cancelled: "Sign-in was cancelled.",
+  "state-mismatch": "That sign-in link expired. Try again.",
+  "bad-callback": "Google sent back an incomplete response. Try again.",
+  "google-failed": "Google sign-in failed. Try again, or use your password.",
+  "rate-limited": "Too many attempts. Wait a moment.",
+};
 
 export const metadata = { title: "Sign in" };
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   if (await getSession()) redirect("/dashboard");
+  const { error } = await searchParams;
+  const message = error ? OAUTH_ERRORS[error] : null;
 
   return (
     <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden px-4 py-16">
@@ -32,8 +49,18 @@ export default async function LoginPage() {
           Your profile, plans and credits are waiting.
         </p>
 
-        <div className="panel p-6">
+        <div className="panel space-y-5 p-6">
+          {message ? (
+            <p
+              role="alert"
+              className="rounded-[10px] border border-down/40 bg-down/5 px-3.5 py-2.5 text-[13px] text-down"
+            >
+              {message}
+            </p>
+          ) : null}
+
           <AuthForm mode="login" action={login} />
+          <GoogleButton configured={googleConfigured()} />
         </div>
 
         <div className="mt-8 flex justify-center">

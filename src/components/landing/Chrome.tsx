@@ -1,4 +1,12 @@
 import Link from "next/link";
+import {
+  DiscordLogo,
+  InstagramLogo,
+  RedditLogo,
+  TiktokLogo,
+  XLogo,
+  YoutubeLogo,
+} from "@phosphor-icons/react/dist/ssr";
 
 import { Brand } from "@/components/Brand";
 import { ButtonLink } from "@/components/ui/primitives";
@@ -9,6 +17,28 @@ const NAV = [
   { href: "#pricing", label: "Pricing" },
   { href: "/fund", label: "Fund the Lab" },
 ];
+
+
+const SOCIALS = [
+  {
+    id: "discord",
+    label: "Discord",
+    icon: DiscordLogo,
+    href: process.env.NEXT_PUBLIC_DISCORD_INVITE ?? "",
+    live: true,
+  },
+  {
+    id: "reddit",
+    label: "Reddit",
+    icon: RedditLogo,
+    href: "https://www.reddit.com/r/GTA6/",
+    live: true,
+  },
+  { id: "youtube", label: "YouTube", icon: YoutubeLogo, href: "", live: true },
+  { id: "tiktok", label: "TikTok", icon: TiktokLogo, href: "", live: false },
+  { id: "instagram", label: "Instagram", icon: InstagramLogo, href: "", live: false },
+  { id: "x", label: "X", icon: XLogo, href: "", live: false },
+] as const;
 
 /** Sticky navigation. One line at desktop, 64px tall. */
 export function SiteNav() {
@@ -91,6 +121,33 @@ export function SiteFooter() {
               </li>
             </ul>
           </div>
+        </div>
+
+        <div className="mt-10 flex flex-wrap items-center gap-2">
+          {SOCIALS.map(({ id, label, icon: Icon, href }) =>
+            href ? (
+              <a
+                key={id}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={label}
+                title={label}
+                className="grid h-9 w-9 place-items-center rounded-full border border-line text-ink-muted transition-colors hover:border-accent hover:text-accent"
+              >
+                <Icon size={17} />
+              </a>
+            ) : (
+              <span
+                key={id}
+                title={label + " account is not set up yet"}
+                aria-hidden
+                className="grid h-9 w-9 place-items-center rounded-full border border-line/60 text-ink-faint/50"
+              >
+                <Icon size={17} />
+              </span>
+            ),
+          )}
         </div>
 
         <div className="mt-12 border-t border-line pt-6">
