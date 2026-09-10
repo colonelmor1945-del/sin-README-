@@ -55,9 +55,14 @@ export default async function AdminPage() {
             Admin
           </span>
         </div>
-        <Link href="/dashboard" className="text-[13px] text-ink-muted hover:text-ink">
-          Back to app
-        </Link>
+        <div className="flex items-center gap-5">
+          <Link href="/admin/content" className="text-[13px] text-accent hover:text-accent-soft">
+            Edit content
+          </Link>
+          <Link href="/dashboard" className="text-[13px] text-ink-muted hover:text-ink">
+            Back to app
+          </Link>
+        </div>
       </header>
 
       <div className="space-y-4 px-4 py-6 sm:px-8">

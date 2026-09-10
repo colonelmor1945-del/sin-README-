@@ -1,0 +1,277 @@
+import "server-only";
+
+import { Pool } from "pg";
+
+import type { Asset, MapPin, Mission, PinKind, Provenance } from "@/lib/types";
+
+/**
+ * Content reads and writes against Postgres.
+ *
+ * Split from src/lib/db/postgres.ts because that file serves user data and this
+ * one serves the game dataset. They share a pool but nothing else, and keeping
+ * them apart means a content migration cannot accidentally touch accounts.
+ *
+ * Imported lazily from src/lib/content/store.ts, so a deployment with no
+ * database never loads the driver.
+ */
+
+const g = globalThis as { __pgPool?: Pool };
+
+function pool(): Pool {
+  if (g.__pgPool) return g.__pgPool;
+
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) throw new Error("DATABASE_URL is not set.");
+
+  g.__pgPool = new Pool({
+    connectionString,
+    ssl: /localhost|127\.0\.0\.1/.test(connectionString)
+      ? undefined
+      : { rejectUnauthorized: false },
+    max: 10,
+  });
+  return g.__pgPool;
+}
+
+/* Provenance mapping.
+ *
+ * SQL uses snake_case for enum labels, the application uses kebab-case. Only
+ * ai_projection actually differs, but mapping all four keeps the direction of
+ * translation obvious and stops the next value being forgotten. */
+const PROV_TO_SQL: Record<Provenance, string> = {
+  verified: "verified",
+  community: "community",
+  estimated: "estimated",
+  "ai-projection": "ai_projection",
+};
+
+const PROV_FROM_SQL: Record<string, Provenance> = {
+  verified: "verified",
+  community: "community",
+  estimated: "estimated",
+  ai_projection: "ai-projection",
+};
+
+/* Reads ------------------------------------------------------------------ */
+
+export async function readMissions(): Promise<Mission[]> {
+  const { rows } = await pool().query<{
+    id: string;
+    name: string;
+    strand: string;
+    region: string;
+    payout: string;
+    duration_min: number;
+    difficulty: number;
+    crew_required: number;
+    best_strategy: string;
+    prerequisites: string[];
+    tips: string[];
+    image_url: string | null;
+    provenance: string;
+  }>(
+    `SELECT id, name, strand, region, payout, duration_min, difficulty,
+            crew_required, best_strategy, prerequisites, tips, image_url, provenance
+       FROM missions WHERE published ORDER BY payout DESC`,
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    strand: r.strand,
+    region: r.region,
+    // BIGINT arrives as a string. In-game payouts sit far below 2^53.
+    payout: Number(r.payout),
+    duration: r.duration_min,
+    difficulty: r.difficulty,
+    crewRequired: r.crew_required,
+    bestStrategy: r.best_strategy,
+    prerequisites: r.prerequisites ?? [],
+    tips: r.tips ?? [],
+    image: r.image_url ?? "",
+    provenance: PROV_FROM_SQL[r.provenance] ?? "estimated",
+  }));
+}
+
+export async function readAssets(): Promise<Asset[]> {
+  const { rows } = await pool().query<{
+    id: string;
+    name: string;
+    kind: Asset["category"];
+    region: string;
+    price: string;
+    daily_net: string;
+    upkeep: string;
+    unlock_level: number;
+    note: string;
+    provenance: string;
+    history: string[] | null;
+  }>(
+    // The sparkline needs the last twelve observations, so they are aggregated
+    // here rather than fetched per asset in a loop.
+    `SELECT a.id, a.name, a.kind, a.region, a.price, a.daily_net, a.upkeep,
+            a.unlock_level, a.note, a.provenance,
+            (SELECT array_agg(p.price ORDER BY p.observed_at)
+               FROM (SELECT price, observed_at FROM asset_prices
+                      WHERE asset_id = a.id
+                      ORDER BY observed_at DESC LIMIT 12) p) AS history
+       FROM assets a
+      WHERE a.published
+      ORDER BY a.price DESC`,
+  );
+
+  return rows.map((r) => {
+    const history = (r.history ?? []).map(Number);
+    const price = Number(r.price);
+
+    return {
+      id: r.id,
+      name: r.name,
+      category: r.kind,
+      region: r.region,
+      price,
+      dailyNet: Number(r.daily_net),
+      upkeep: Number(r.upkeep),
+      unlockLevel: r.unlock_level,
+      note: r.note,
+      provenance: PROV_FROM_SQL[r.provenance] ?? "estimated",
+      // A single observation cannot show a trend, so fall back to a flat pair
+      // rather than letting the sparkline divide by a zero span.
+      history: history.length >= 2 ? history : [price, price],
+      trend: trendFrom(history),
+      advice: adviceFrom(price, Number(r.daily_net), trendFrom(history)),
+    };
+  });
+}
+
+/** Derived from the price series rather than stored, so it cannot go stale. */
+function trendFrom(history: number[]): Asset["trend"] {
+  if (history.length < 2) return "flat";
+  const delta = (history[history.length - 1] - history[0]) / history[0];
+  if (delta > 0.08) return "strong-up";
+  if (delta > 0.01) return "up";
+  if (delta < -0.01) return "down";
+  return "flat";
+}
+
+/**
+ * The recommendation, derived from payback and trend.
+ *
+ * Deliberately not an editable column. A stored recommendation is an opinion
+ * that outlives the numbers it was based on, and the whole product argument is
+ * that our calls are reproducible from the data.
+ */
+function adviceFrom(price: number, dailyNet: number, trend: Asset["trend"]): Asset["advice"] {
+  if (dailyNet <= 0) return "analyze";
+  if (trend === "down") return "wait";
+  const payback = price / dailyNet;
+  return payback <= 12 ? "buy" : "hold";
+}
+
+export async function readMapPins(): Promise<MapPin[]> {
+  const { rows } = await pool().query<{
+    id: string;
+    name: string;
+    kind: string;
+    region: string;
+    x: string;
+    y: string;
+    detail: string;
+    value: string;
+    provenance: string;
+  }>(
+    `SELECT id, name, kind, region, x, y, detail, value, provenance
+       FROM map_locations WHERE published`,
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    kind: r.kind as PinKind,
+    region: r.region,
+    // NUMERIC also arrives as a string.
+    x: Number(r.x),
+    y: Number(r.y),
+    detail: r.detail,
+    value: Number(r.value),
+    provenance: PROV_FROM_SQL[r.provenance] ?? "estimated",
+  }));
+}
+
+/* Writes ----------------------------------------------------------------- */
+
+export async function writeMission(m: Mission): Promise<void> {
+  await pool().query(
+    `INSERT INTO missions
+       (id, name, strand, region, payout, duration_min, difficulty, crew_required,
+        best_strategy, prerequisites, tips, image_url, provenance)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+     ON CONFLICT (id) DO UPDATE SET
+       name = EXCLUDED.name, strand = EXCLUDED.strand, region = EXCLUDED.region,
+       payout = EXCLUDED.payout, duration_min = EXCLUDED.duration_min,
+       difficulty = EXCLUDED.difficulty, crew_required = EXCLUDED.crew_required,
+       best_strategy = EXCLUDED.best_strategy, prerequisites = EXCLUDED.prerequisites,
+       tips = EXCLUDED.tips, image_url = EXCLUDED.image_url,
+       provenance = EXCLUDED.provenance, updated_at = now()`,
+    [
+      m.id,
+      m.name,
+      m.strand,
+      m.region,
+      Math.round(m.payout),
+      m.duration,
+      m.difficulty,
+      m.crewRequired,
+      m.bestStrategy,
+      m.prerequisites,
+      m.tips,
+      m.image || null,
+      PROV_TO_SQL[m.provenance],
+    ],
+  );
+}
+
+export async function writeAsset(a: Asset): Promise<void> {
+  const client = await pool().connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query(
+      `INSERT INTO assets
+         (id, name, kind, region, price, daily_net, upkeep, unlock_level, note, provenance)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       ON CONFLICT (id) DO UPDATE SET
+         name = EXCLUDED.name, kind = EXCLUDED.kind, region = EXCLUDED.region,
+         price = EXCLUDED.price, daily_net = EXCLUDED.daily_net,
+         upkeep = EXCLUDED.upkeep, unlock_level = EXCLUDED.unlock_level,
+         note = EXCLUDED.note, provenance = EXCLUDED.provenance, updated_at = now()`,
+      [
+        a.id,
+        a.name,
+        a.category,
+        a.region,
+        Math.round(a.price),
+        Math.round(a.dailyNet),
+        Math.round(a.upkeep),
+        a.unlockLevel,
+        a.note,
+        PROV_TO_SQL[a.provenance],
+      ],
+    );
+
+    // Every price edit appends an observation. The series is the audit trail
+    // for the tracker, so a correction that overwrote history would erase the
+    // evidence behind every call the platform has made.
+    await client.query(
+      "INSERT INTO asset_prices (asset_id, price, provenance) VALUES ($1, $2, $3)",
+      [a.id, Math.round(a.price), PROV_TO_SQL[a.provenance]],
+    );
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
