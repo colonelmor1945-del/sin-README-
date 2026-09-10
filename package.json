@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
@@ -27,7 +29,9 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
+    "@vitest/coverage-v8": "^5.0.0",
     "tailwindcss": "^4.1.13",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^5.0.0"
   }
 }
