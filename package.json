@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "audit:mobile": "node scripts/audit-mobile.mjs",
     "build:check": "node scripts/build-check.mjs",
-    "icons": "node scripts/make-icons.mjs"
+    "icons": "node scripts/make-icons.mjs",
+    "preflight": "node scripts/preflight.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
