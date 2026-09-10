@@ -547,11 +547,7 @@ const Progress = memo(function Progress() {
   }
 
   const { fraction, elapsedDays, totalDays } = waitProgress(now);
-  const target = new Date(LAUNCH.target).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const local = localLaunch();
 
   return (
     <div className="mt-6 max-w-[62ch]">
@@ -562,7 +558,7 @@ const Progress = memo(function Progress() {
           </span>{" "}
           of the wait done
         </span>
-        <span className="tabular text-ink-faint">{target}</span>
+        <span className="tabular text-ink-faint">{local.date}</span>
       </div>
 
       <div className="mt-2 h-[3px] w-full overflow-hidden rounded-full bg-line">
@@ -585,9 +581,67 @@ const Progress = memo(function Progress() {
       <p className="tabular mt-1.5 text-[11px] text-ink-faint">
         Day {elapsedDays} of {totalDays} since the date was announced
       </p>
+
+      {/*
+        The clock above counts to an instant, which is the same instant
+        everywhere on earth. This line is the part that is not the same
+        everywhere: what that instant reads as on the viewer's own wall clock.
+      */}
+      <p className="mt-1 text-[11px] text-ink-faint">
+        That lands at{" "}
+        <span className="tabular text-ink-muted">{local.time}</span> your time
+        {local.zone ? (
+          <>
+            {" "}
+            (<span className="tabular">{local.zone}</span>)
+          </>
+        ) : null}
+        .
+      </p>
     </div>
   );
 });
+
+/**
+ * The launch instant, on the viewer's wall clock.
+ *
+ * The countdown itself does not depend on where you are: it counts down to a
+ * single moment, and that moment arrives simultaneously for everyone. What
+ * does depend on where you are is what that moment is *called* locally, and
+ * for anyone far enough west it is not even the same date. Someone in Hawaii
+ * sees the 18th, and telling them the 19th would be wrong rather than
+ * approximate.
+ *
+ * So the date and time are formatted in the viewer's own locale and zone
+ * rather than a fixed one. Client only, for the same reason the digits are:
+ * the server does not know the viewer's zone, and guessing produces a
+ * hydration mismatch.
+ */
+function localLaunch(): { date: string; time: string; zone: string } {
+  const at = new Date(LAUNCH.target);
+
+  const date = at.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  const time = at.toLocaleString(undefined, {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  // Not every engine reports a zone, so this is optional in the UI.
+  let zone = "";
+  try {
+    zone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+  } catch {
+    zone = "";
+  }
+
+  return { date, time, zone };
+}
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
