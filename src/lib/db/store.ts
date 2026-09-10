@@ -263,7 +263,28 @@ export const memoryStore: Store = {
   },
 };
 
+/**
+ * Adapter selection.
+ *
+ * Postgres whenever DATABASE_URL is set, the in-memory adapter otherwise.
+ * The import is lazy so a deployment without a database never pulls the pg
+ * driver into the bundle, and a local checkout needs no Postgres at all.
+ *
+ * In production the memory adapter is refused outright rather than silently
+ * accepted: it loses every account on restart, and discovering that after
+ * launch is not a recoverable mistake.
+ */
 export function getStore(): Store {
-  // Swap for the Postgres adapter once DATABASE_URL is wired.
-  return memoryStore;
+  if (!process.env.DATABASE_URL) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "DATABASE_URL is not set. The in-memory store loses every account on restart and must not run in production.",
+      );
+    }
+    return memoryStore;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { postgresStore } = require("@/lib/db/postgres") as typeof import("@/lib/db/postgres");
+  return postgresStore;
 }

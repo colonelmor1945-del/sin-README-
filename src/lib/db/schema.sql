@@ -32,10 +32,18 @@ CREATE TABLE users (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email               CITEXT UNIQUE NOT NULL,
   username            TEXT UNIQUE NOT NULL CHECK (char_length(username) BETWEEN 3 AND 32),
-  -- Authentication is delegated to the auth provider. No password column
-  -- exists here on purpose; if you ever add one it stores an Argon2id hash.
+  -- Which mechanism created this account: 'password' or 'google'.
   auth_provider       TEXT NOT NULL,
+  -- The provider's stable identifier. For password accounts this is the
+  -- email; for Google it is the 'sub' claim, which survives the user
+  -- renaming their account or changing their address.
   auth_subject        TEXT NOT NULL,
+  -- scrypt, in the format written by src/lib/auth/password.ts:
+  --   scrypt$N$r$p$<salt base64>$<derived key base64>
+  -- The cost parameters travel with the hash so they can be raised later
+  -- without invalidating existing passwords. NULL for accounts that only
+  -- ever sign in through an identity provider.
+  password_hash       TEXT,
   role                user_role NOT NULL DEFAULT 'member',
   plan                plan_tier NOT NULL DEFAULT 'free',
   subscription_status subscription_state NOT NULL DEFAULT 'none',
@@ -47,6 +55,28 @@ CREATE TABLE users (
 );
 
 CREATE INDEX users_plan_idx ON users (plan) WHERE deleted_at IS NULL;
+
+-- ------------------------------------------------------------- sessions ----
+
+-- Opaque session tokens. Only the SHA-256 of the token is stored, so a leaked
+-- dump cannot be replayed as a live session. Nothing about the user, their
+-- tier or their role travels in the cookie, so a tampered cookie can only
+-- ever be invalid rather than privileged.
+CREATE TABLE sessions (
+  token_hash  TEXT PRIMARY KEY,
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Hashed, never raw. Enough to spot a session used from somewhere new,
+  -- not enough to be a location log.
+  ip_hash     TEXT,
+  user_agent  TEXT
+);
+
+CREATE INDEX sessions_user_idx ON sessions (user_id);
+-- Expiry is filtered on read as well, so a stalled cleanup job can never
+-- resurrect a session. This index serves the sweep, not correctness.
+CREATE INDEX sessions_expiry_idx ON sessions (expires_at);
 
 CREATE TABLE user_profiles (
   user_id        UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

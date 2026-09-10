@@ -3,6 +3,7 @@ import { ArrowSquareOut, ChatCircle, ArrowFatUp } from "@phosphor-icons/react/di
 import { PageHeader } from "@/components/app/PageHeader";
 import { DiscordPanel } from "@/components/app/DiscordPanel";
 import { ShortsFeed } from "@/components/app/ShortsFeed";
+import { SpotifyPanel } from "@/components/app/SpotifyPanel";
 import { Panel, PanelHead, cx } from "@/components/ui/primitives";
 import { requireSession } from "@/lib/auth/session";
 import { fetchDiscordWidget } from "@/lib/social/discord";
@@ -103,6 +104,8 @@ export default async function FeedPage() {
               </a>
             </div>
           </Panel>
+
+          <SpotifyPanel playlistId={process.env.NEXT_PUBLIC_SPOTIFY_PLAYLIST_ID} />
 
           <Panel quiet className="p-5">
             <h2 className="text-[13px] font-semibold text-ink">

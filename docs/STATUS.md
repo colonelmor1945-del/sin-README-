@@ -60,7 +60,8 @@ Two corollaries that have already caught us out:
 | Community feed: YouTube Shorts, Reddit, Discord | Done |
 | Pricing tiers, discount engine, Lab Credits | Done |
 | Admin panel, legal page, Fund the Lab page | Done |
-| PostgreSQL schema (23 tables) | Written, adapter not wired |
+| PostgreSQL schema and adapter | Done. Needs a DATABASE_URL |
+| Spotify playlist embed | Done |
 | Payments | Interface and webhook verification written, no processor |
 
 Roughly 10,800 lines across 19 pages and 7 API routes.
@@ -69,15 +70,16 @@ Roughly 10,800 lines across 19 pages and 7 API routes.
 
 ## What is left, in the order I would do it
 
-### 1. Postgres adapter, blocking everything else
+### 1. Provision a database
 
-`src/lib/db/store.ts` defines the repository interface and ships an in-memory
-adapter. **Every account, plan and session is lost on restart.** The schema in
-`src/lib/db/schema.sql` mirrors the interface one to one, so this is a
-translation rather than a design job, but nothing can go live before it.
+The adapter is written (`src/lib/db/postgres.ts`). What is left is
+operational: create a Postgres instance, apply `src/lib/db/schema.sql`, set
+`DATABASE_URL`. `getStore()` picks the adapter automatically, and refuses to
+fall back to the in-memory store in production.
 
-Add `DATABASE_URL`, write the Postgres adapter, switch the one line in
-`getStore()`.
+Writing the adapter surfaced two gaps in the original schema, both now fixed:
+there was no `sessions` table and no `password_hash` column, because the
+schema was written before authentication existed.
 
 ### 2. Payments
 
