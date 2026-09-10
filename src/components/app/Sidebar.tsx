@@ -11,6 +11,7 @@ import {
   MapTrifold,
   Newspaper,
   PlayCircle,
+  Plugs,
   Path,
   Robot,
   Target,
@@ -38,6 +39,7 @@ const NAV = [
 ] as const;
 
 const FOOT = [
+  { href: "/dashboard/setup", label: "Setup", icon: Plugs },
   { href: "/dashboard/profile", label: "Profile", icon: UserCircle },
   { href: "/dashboard/settings", label: "Settings", icon: GearSix },
 ] as const;
