@@ -77,6 +77,10 @@ Rules:
 - Respect the level gates and the prerequisites. If a step is locked, add the unlocking step first.
 - A purchase step must not require more cash than the player will hold at that point in the plan.
 - Between 4 and 7 steps. Each step needs a concrete title, a one or two sentence detail, and honest estimates.
+- Every step is tagged with a horizon: "short" for this play session, "medium"
+  for the next few, "long" for the rest of the route. Use all three, in order,
+  and put at least one step in each. A plan that is entirely short term is a
+  to-do list, and one that is entirely long term is a wish.
 - estProfit for a purchase step is the net income earned over the plan horizon minus the purchase price, so it may be negative early.
 - Match the requested approach. "safest" means avoiding difficulty 4 and 5 content even at a cost in speed.
 - risks must name at least two specific, concrete ways this plan underperforms.

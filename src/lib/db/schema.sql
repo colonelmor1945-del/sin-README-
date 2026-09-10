@@ -192,10 +192,14 @@ CREATE TABLE money_plans (
 
 CREATE INDEX money_plans_user_idx ON money_plans (user_id, created_at DESC);
 
+CREATE TYPE plan_horizon AS ENUM ('short', 'medium', 'long');
+
 CREATE TABLE money_plan_steps (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   plan_id       UUID NOT NULL REFERENCES money_plans(id) ON DELETE CASCADE,
   step_order    INT NOT NULL,
+  -- This session, the next few, or the rest of the route.
+  horizon       plan_horizon NOT NULL DEFAULT 'short',
   title         TEXT NOT NULL,
   detail        TEXT NOT NULL,
   kind          TEXT NOT NULL,

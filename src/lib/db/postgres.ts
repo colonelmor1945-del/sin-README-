@@ -4,7 +4,14 @@ import { Pool, type PoolClient } from "pg";
 
 import type { Account, Store } from "@/lib/db/store";
 import { DEFAULT_PROFILE, SIGNUP_CREDITS } from "@/lib/db/store";
-import type { CreditReason, MoneyPlan, PlanStrategy, PlayerProfile, Tier } from "@/lib/types";
+import type {
+  CreditReason,
+  MoneyPlan,
+  PlanHorizon,
+  PlanStrategy,
+  PlayerProfile,
+  Tier,
+} from "@/lib/types";
 
 /**
  * PostgreSQL adapter.
@@ -326,6 +333,7 @@ export const postgresStore: Store = {
     const { rows: steps } = await pool().query<{
       plan_id: string;
       step_order: number;
+      horizon: PlanHorizon;
       title: string;
       detail: string;
       kind: string;
@@ -334,7 +342,7 @@ export const postgresStore: Store = {
       required_cash: string;
       completed_at: Date | null;
     }>(
-      `SELECT plan_id, step_order, title, detail, kind, est_minutes, est_profit,
+      `SELECT plan_id, step_order, horizon, title, detail, kind, est_minutes, est_profit,
               required_cash, completed_at
          FROM money_plan_steps
         WHERE plan_id = ANY($1::uuid[])
@@ -356,6 +364,7 @@ export const postgresStore: Store = {
         .filter((s) => s.plan_id === plan.id)
         .map((s) => ({
           order: s.step_order,
+          horizon: s.horizon,
           title: s.title,
           detail: s.detail,
           kind: s.kind as MoneyPlan["steps"][number]["kind"],
@@ -389,11 +398,12 @@ export const postgresStore: Store = {
       for (const step of plan.steps) {
         await client.query(
           `INSERT INTO money_plan_steps
-             (plan_id, step_order, title, detail, kind, est_minutes, est_profit, required_cash)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+             (plan_id, step_order, horizon, title, detail, kind, est_minutes, est_profit, required_cash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [
             plan.id,
             step.order,
+            step.horizon,
             step.title,
             step.detail,
             step.kind,

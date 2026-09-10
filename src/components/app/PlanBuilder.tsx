@@ -6,6 +6,7 @@ import { ProvenanceTag } from "@/components/ProvenanceTag";
 import { Button, Panel, PanelHead, Skeleton, cx } from "@/components/ui/primitives";
 import { STRATEGIES } from "@/lib/calc";
 import { duration, money, moneyShort } from "@/lib/format";
+import { HORIZON_META } from "@/lib/types";
 import type { Asset, MoneyPlan, PlanStrategy, PlayerProfile } from "@/lib/types";
 
 type Status = "idle" | "loading" | "done" | "error";
@@ -221,8 +222,43 @@ export function PlanBuilder({
                   </span>
                 }
               />
+              {(["short", "medium", "long"] as const).map((horizon) => {
+                const steps = plan.steps.filter((s) => s.horizon === horizon);
+                if (steps.length === 0) return null;
+
+                const meta = HORIZON_META[horizon];
+                const horizonProfit = steps.reduce((sum, s) => sum + s.estProfit, 0);
+                const horizonMinutes = steps.reduce((sum, s) => sum + s.estMinutes, 0);
+                const horizonDone = steps.every((s) => doneSteps.has(s.order));
+
+                return (
+                  <section key={horizon}>
+                    {/*
+                      Horizon header. Doubles as a progress marker: once every
+                      step under it is ticked, the whole band reads as done.
+                    */}
+                    <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line bg-surface-2 px-5 py-2.5">
+                      <div className="flex flex-wrap items-baseline gap-x-3">
+                        <h3
+                          className={cx(
+                            "text-[12px] font-semibold",
+                            horizonDone ? "text-up" : "text-ink",
+                          )}
+                        >
+                          {meta.label}
+                        </h3>
+                        <span className="text-[11px] text-ink-faint">{meta.window}</span>
+                      </div>
+                      <span className="tabular text-[11px] text-ink-faint">
+                        {duration(horizonMinutes)},{" "}
+                        <span className={horizonProfit >= 0 ? "text-up" : "text-down"}>
+                          {moneyShort(horizonProfit)}
+                        </span>
+                      </span>
+                    </header>
+
               <ol className="divide-y divide-line/70">
-                {plan.steps.map((step) => {
+                {steps.map((step) => {
                   const done = doneSteps.has(step.order);
                   return (
                     <li key={step.order} className="flex items-start gap-4 px-5 py-4">
@@ -279,6 +315,9 @@ export function PlanBuilder({
                   );
                 })}
               </ol>
+                  </section>
+                );
+              })}
             </Panel>
 
             <Panel quiet className="p-5">

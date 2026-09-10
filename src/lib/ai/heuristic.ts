@@ -68,6 +68,7 @@ function buildPlan(profile: PlayerProfile): MoneyPlan {
     const profit = opener.payout * runs;
     steps.push({
       order: order++,
+      horizon: "short",
       title: `Run ${opener.name}${runs > 1 ? ` x${runs}` : ""}`,
       detail: `${moneyShort(effectiveHourly(opener))} per hour risk adjusted, the best rate unlocked at level ${profile.level}. Use the ${opener.bestStrategy.toLowerCase()} route.`,
       kind: "mission",
@@ -84,6 +85,7 @@ function buildPlan(profile: PlayerProfile): MoneyPlan {
     const pb = paybackDays(firstBuy);
     steps.push({
       order: order++,
+      horizon: "short",
       title: `Buy the ${firstBuy.name}`,
       detail: `Payback in about ${pb?.toFixed(1)} in-game days, the shortest of anything you can afford. Net ${moneyShort(firstBuy.dailyNet)} a day after upkeep.`,
       kind: "purchase",
@@ -101,6 +103,7 @@ function buildPlan(profile: PlayerProfile): MoneyPlan {
     const profit = grind.payout * runs + (firstBuy?.dailyNet ?? 0) * 4;
     steps.push({
       order: order++,
+      horizon: "medium",
       title: `Loop ${grind.name} while the business accrues`,
       detail: `Six runs at ${grind.duration} minutes each. Passive income from step ${order - 2} stacks on top of this.`,
       kind: "grind",
@@ -118,6 +121,7 @@ function buildPlan(profile: PlayerProfile): MoneyPlan {
   if (scaleTarget) {
     steps.push({
       order: order++,
+      horizon: "long",
       title: `Move up to the ${scaleTarget.name}`,
       detail:
         scaleTarget.unlockLevel > profile.level
@@ -137,6 +141,7 @@ function buildPlan(profile: PlayerProfile): MoneyPlan {
     const runs = Math.max(1, Math.ceil(remaining / closer.payout));
     steps.push({
       order: order++,
+      horizon: "long",
       title: `Close the gap with ${closer.name}`,
       detail: `About ${runs} run${runs > 1 ? "s" : ""} at ${moneyShort(closer.payout)} each, on top of passive income, covers the remaining ${moneyShort(remaining)}.`,
       kind: "mission",

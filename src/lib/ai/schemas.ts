@@ -7,6 +7,8 @@ import { z } from "zod";
 
 export const PlanStepSchema = z.object({
   order: z.number().int().min(1),
+  /** short is this session, medium the next few, long the rest of the route. */
+  horizon: z.enum(["short", "medium", "long"]),
   title: z.string(),
   detail: z.string(),
   kind: z.enum(["mission", "purchase", "investment", "grind"]),

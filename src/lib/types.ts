@@ -95,8 +95,39 @@ export interface PlayerProfile {
   goal: number;
 }
 
+/**
+ * How far out a step sits.
+ *
+ * Short is this session, medium is the next few, long is the run that changes
+ * the curve. The split exists because a plan that reads as one flat list of
+ * fifteen steps is a plan nobody starts.
+ */
+export type PlanHorizon = "short" | "medium" | "long";
+
+export const HORIZON_META: Record<
+  PlanHorizon,
+  { label: string; window: string; blurb: string }
+> = {
+  short: {
+    label: "Short term",
+    window: "This session",
+    blurb: "What to do in the next hour or two of play.",
+  },
+  medium: {
+    label: "Medium term",
+    window: "Next few sessions",
+    blurb: "Where the capital from the short term goes.",
+  },
+  long: {
+    label: "Long term",
+    window: "The rest of the route",
+    blurb: "The purchases and runs that close the gap to your goal.",
+  },
+};
+
 export interface PlanStep {
   order: number;
+  horizon: PlanHorizon;
   title: string;
   detail: string;
   kind: "mission" | "purchase" | "investment" | "grind";
