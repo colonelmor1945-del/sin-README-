@@ -240,7 +240,7 @@ vec3 sky(vec3 rd, float t) {
   col = mix(col, SKY_BLUE,   smoothstep( 0.60, 1.15, p.y));
 
   // Sun. Low, large and soft, sitting just above the horizon line.
-  vec2 sunP = p - vec2(0.0, 0.06);
+  vec2 sunP = p - vec2(0.0, 0.015);
   float d = length(sunP * vec2(1.0, 1.15));
   col += SUN_CORE * smoothstep(0.30, 0.26, d) * 0.85;
   // Two-stage bloom: a tight halo and a wide wash across the whole sky.
@@ -279,6 +279,26 @@ vec3 sky(vec3 rd, float t) {
     col = mix(col, BIRD, bird * 0.55);
   }
 
+  // Ferris wheel on the far right of the waterfront. Rim, hub and spokes,
+  // turning slowly. One landmark is enough to stop a skyline reading as
+  // anonymous massing.
+  {
+    vec2 w = (p - vec2(0.55, 0.085)) * vec2(1.0, 1.0);
+    float d = length(w);
+    float rim = smoothstep(0.004, 0.001, abs(d - 0.055));
+    float spokes = 0.0;
+    if (d < 0.058) {
+      float a = atan(w.y, w.x) + uTime * 0.06;
+      // Twelve spokes: fract of the angle over the spacing, folded to a ridge.
+      float f = abs(fract(a * 12.0 / 6.2831) - 0.5) * 2.0;
+      spokes = smoothstep(0.92, 1.0, f);
+    }
+    float wheel = clamp(rim + spokes * 0.55, 0.0, 1.0);
+    col = mix(col, PALM_MID, wheel * 0.75);
+    // Rim lights, because a wheel at dusk is lit.
+    col += ACCENT * rim * 0.35;
+  }
+
   // Palms. Three depths: hazed at the back, near-solid at the front. The
   // parallax between the rows is what gives the horizon its depth.
   float back = palmRow(p * 1.25 - vec2(0.10, -0.02), 2.6, 0.58, 0.26);
@@ -287,7 +307,7 @@ vec3 sky(vec3 rd, float t) {
   float mid = palmRow(p * 0.95 - vec2(0.44, -0.05), 1.7, 0.78, 0.40);
   col = mix(col, PALM_MID, mid * 0.88);
 
-  float front = palmRow(p * 0.66 - vec2(0.17, -0.10), 1.0, 1.10, 0.62);
+  float front = palmRow(p * 0.58 - vec2(0.34, -0.13), 1.0, 1.55, 0.78);
   col = mix(col, PALM_NEAR, front);
 
   return col;

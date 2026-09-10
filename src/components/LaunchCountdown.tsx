@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 
 import { ProvenanceTag } from "@/components/ProvenanceTag";
 import { cx } from "@/components/ui/primitives";
@@ -61,7 +62,7 @@ export function LaunchCountdown({
       </div>
 
       <div
-        className="mt-6 flex items-start gap-2 sm:gap-4"
+        className="mt-6 flex items-start gap-1 sm:gap-3 lg:gap-4"
         role="timer"
         aria-live="off"
       >
@@ -134,13 +135,22 @@ function Unit({
 
   return (
     <div className="flex flex-col items-center">
+      {/*
+        The reel is decorative and hidden. This is the only thing a screen
+        reader sees, so it says the whole number and its unit in one phrase
+        rather than spelling the digits out one at a time.
+      */}
+      <span className="sr-only">
+        {display === "--" ? `${label} loading` : `${display} ${label.toLowerCase()}`}
+      </span>
       <span className="relative block">
-        {/* Bloom. Purely decorative, and hidden from the accessibility tree. */}
+        {/* Bloom sits behind the reel and does not roll, so the glow stays put
+            while the digits turn. */}
         <span
           aria-hidden
           className={cx(
-            "pointer-events-none absolute inset-0 select-none blur-[26px] opacity-80",
-            big ? "text-6xl sm:text-7xl lg:text-8xl" : "text-3xl",
+            "pointer-events-none absolute inset-0 select-none blur-[16px] opacity-80 sm:blur-[26px]",
+            big ? "text-[2.75rem] sm:text-6xl lg:text-8xl" : "text-3xl",
             "tabular leading-none font-semibold tracking-tight",
           )}
           style={{
@@ -154,32 +164,88 @@ function Unit({
           {display}
         </span>
 
-        <span
-          className={cx(
-            "tabular relative block leading-none font-semibold tracking-tight",
-            big ? "text-6xl sm:text-7xl lg:text-8xl" : "text-3xl",
-            ticking && "animate-[pulse_1s_ease-in-out_infinite]",
-          )}
-          style={
-            value === undefined
-              ? { color: "var(--color-ink-faint)" }
-              : {
-                  background:
-                    "linear-gradient(165deg, #ffffff 0%, #ffd6e6 18%, #ff4d92 52%, #c657ff 82%, #ffa64d 100%)",
-                  WebkitBackgroundClip: "text",
-                  backgroundClip: "text",
-                  color: "transparent",
-                }
-          }
-        >
-          {display}
+        <span className="relative flex">
+          {display.split("").map((char, i) => (
+            <Digit
+              key={i}
+              value={char}
+              size={big ? "text-[2.75rem] sm:text-6xl lg:text-8xl" : "text-3xl"}
+            />
+          ))}
         </span>
       </span>
 
-      <span className="mt-2 text-[10px] tracking-[0.2em] text-ink-faint uppercase">
+      <span
+        aria-hidden
+        className="mt-2 text-[9px] tracking-[0.14em] text-ink-faint uppercase sm:text-[10px] sm:tracking-[0.2em]"
+      >
         {label}
       </span>
     </div>
+  );
+}
+
+/**
+ * A single rolling digit.
+ *
+ * The strip holds 0 through 9 and slides to the right offset, so a tick reads
+ * as the digit turning over rather than being swapped out. Only the digits
+ * that actually changed move, which is why the seconds column rolls every
+ * second and the days column sits still for a day.
+ */
+function Digit({ value, size }: { value: string; size: string }) {
+  const reduce = useReducedMotion();
+  const n = Number(value);
+
+  // Not a number, so nothing to roll. The placeholder before hydration.
+  if (Number.isNaN(n)) {
+    return (
+      <span aria-hidden className={cx("tabular block leading-none font-semibold text-ink-faint", size)}>
+        {value}
+      </span>
+    );
+  }
+
+  return (
+    <span aria-hidden className={cx("relative block overflow-hidden leading-none", size)}>
+      {/* Reserves the column width without being visible or read aloud. */}
+      <span className="tabular invisible block font-semibold" aria-hidden>
+        0
+      </span>
+      {/*
+        The strip is ten digits tall and a percentage translate is measured
+        against the element's own height, so one digit is 10 percent of the strip
+        and not 100. Using 100 scrolled nine digits past the window and left the
+        column blank, which is exactly what it did.
+      */}
+      <motion.span
+        className="absolute inset-x-0 top-0 flex flex-col items-center"
+        animate={{ y: `-${n * 10}%` }}
+        transition={
+          reduce
+            ? { duration: 0 }
+            : // Overshoot slightly and settle, the way a mechanical reel does.
+              { type: "spring", stiffness: 320, damping: 30, mass: 0.7 }
+        }
+        aria-hidden
+      >
+        {Array.from({ length: 10 }, (_, i) => (
+          <span
+            key={i}
+            className="tabular block font-semibold tracking-tight"
+            style={{
+              background:
+                "linear-gradient(165deg, #ffffff 0%, #ffd6e6 18%, #ff4d92 52%, #c657ff 82%, #ffa64d 100%)",
+              WebkitBackgroundClip: "text",
+              backgroundClip: "text",
+              color: "transparent",
+            }}
+          >
+            {i}
+          </span>
+        ))}
+      </motion.span>
+    </span>
   );
 }
 
@@ -187,7 +253,7 @@ function Colon() {
   return (
     <span
       aria-hidden
-      className="tabular mt-1 text-4xl leading-none font-semibold text-accent/30 select-none sm:mt-3 sm:text-6xl lg:text-7xl"
+      className="tabular mt-0.5 text-3xl leading-none font-semibold text-accent/30 select-none sm:mt-2 sm:text-5xl lg:mt-3 lg:text-7xl"
     >
       :
     </span>

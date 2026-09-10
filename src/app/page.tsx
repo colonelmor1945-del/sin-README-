@@ -7,6 +7,13 @@ import { Reveal } from "@/components/Reveal";
 import { VicePlayground } from "@/components/VicePlayground";
 import { SiteFooter, SiteNav } from "@/components/landing/Chrome";
 import { HeroTerminal } from "@/components/landing/HeroTerminal";
+import { ProductSlides } from "@/components/landing/ProductSlides";
+import {
+  EconomySlide,
+  MapSlide,
+  MissionsSlide,
+  PlanSlide,
+} from "@/components/landing/slideContent";
 import { ButtonLink, Panel } from "@/components/ui/primitives";
 import { PROVENANCE_META } from "@/lib/provenance";
 import { TIERS } from "@/lib/entitlements";
@@ -24,6 +31,7 @@ export default function LandingPage() {
         <Hero />
         <Countdown />
         <DataHonesty />
+        <Screens />
         <Capabilities />
         <HowItWorks />
         <MissionPreview />
@@ -211,7 +219,60 @@ function DataHonesty() {
   );
 }
 
-/* 4. Capabilities bento, asymmetric grid with mixed cell content ---------- */
+/* 4. Product carousel ----------------------------------------------------- */
+
+function Screens() {
+  return (
+    <section className="border-b border-line">
+      <div className="mx-auto max-w-[1400px] px-4 py-24 sm:px-8">
+        <h2 className="max-w-[22ch] text-3xl leading-tight font-semibold tracking-tight text-ink md:text-4xl">
+          Four screens you will actually use.
+        </h2>
+
+        <div className="mt-10">
+          <ProductSlides
+            slides={[
+              {
+                id: "missions",
+                label: "Mission intelligence",
+                headline: "Sorted by what it pays, not what it looks like.",
+                blurb:
+                  "Risk-adjusted hourly subtracts the expected cost of failed runs and splits the payout across the crew a mission needs. Rates show as ranges, because the data does not support a single number.",
+                content: <MissionsSlide />,
+              },
+              {
+                id: "economy",
+                label: "Economy tracker",
+                headline: "Payback period beats sticker price.",
+                blurb:
+                  "Every asset ranked by how fast it repays its own cost, with the price history behind each call. The nightclub has the biggest headline income and one of the slowest paybacks.",
+                content: <EconomySlide />,
+              },
+              {
+                id: "plan",
+                label: "Money plan",
+                headline: "An ordered route, split by horizon.",
+                blurb:
+                  "Short term is this session, medium is the next few, long is the rest of the route. Every step carries a time cost, a profit estimate and the cash you need before you start it.",
+                content: <PlanSlide />,
+              },
+              {
+                id: "map",
+                label: "Intelligence map",
+                headline: "Every earner on one map.",
+                blurb:
+                  "Missions, businesses, properties and money spots across Leonida, filterable by layer. The landmass is drawn in code rather than traced from a game asset.",
+                content: <MapSlide />,
+              },
+            ]}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* 5. Capabilities bento, asymmetric grid with mixed cell content ---------- */
 
 function Capabilities() {
   const best = sortMissions(MISSIONS, "best-hourly")[0];
