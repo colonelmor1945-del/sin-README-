@@ -161,8 +161,16 @@ export function Calculator({
         </div>
       </Panel>
 
-      {/* Mission efficiency table */}
-      <Panel className="lg:col-span-2">
+      {/*
+        Mission efficiency table.
+
+        min-w-0 is load-bearing. A grid item defaults to min-width:auto, which
+        means it refuses to shrink below its content's min-content size, so the
+        640px table inside pushed this column to 640px and took the page with
+        it. The overflow-x-auto wrapper never got a chance to scroll, because
+        there was nothing left to scroll inside.
+      */}
+      <Panel className="min-w-0 lg:col-span-2">
         <PanelHead
           title="Mission profitability"
           meta={<span className="text-[11px] text-ink-faint">Sorted by risk-adjusted hourly</span>}

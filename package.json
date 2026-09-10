@@ -10,7 +10,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "audit:mobile": "node scripts/audit-mobile.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
