@@ -12,6 +12,7 @@ import {
   Newspaper,
   PlayCircle,
   Plugs,
+  Queue,
   Path,
   Robot,
   Target,
@@ -39,6 +40,7 @@ const NAV = [
 ] as const;
 
 const FOOT = [
+  { href: "/dashboard/queue", label: "Review queue", icon: Queue },
   { href: "/dashboard/setup", label: "Setup", icon: Plugs },
   { href: "/dashboard/profile", label: "Profile", icon: UserCircle },
   { href: "/dashboard/settings", label: "Settings", icon: GearSix },
