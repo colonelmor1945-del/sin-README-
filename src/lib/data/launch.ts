@@ -78,3 +78,32 @@ export function countdownFrom(target: string, now: number): Countdown {
     totalMs: diff,
   };
 }
+
+/**
+ * How far through the wait we are.
+ *
+ * Measured from the date Rockstar announced this target, not from some
+ * arbitrary epoch, so the bar answers a real question: how much of the wait
+ * that was announced has actually passed. A countdown alone says how long is
+ * left; this says how far you have come, which is the half people feel.
+ */
+export function waitProgress(now: number): {
+  fraction: number;
+  elapsedDays: number;
+  totalDays: number;
+} {
+  // The announcement that set the current date. Falls back to the first
+  // entry if history is ever empty.
+  const announced = LAUNCH.history[LAUNCH.history.length - 1];
+  const start = Date.parse(announced?.announcedOn ?? "") || Date.parse("2025-11-01");
+  const end = new Date(LAUNCH.target).getTime();
+
+  const total = Math.max(1, end - start);
+  const elapsed = Math.min(total, Math.max(0, now - start));
+
+  return {
+    fraction: elapsed / total,
+    elapsedDays: Math.floor(elapsed / 86_400_000),
+    totalDays: Math.floor(total / 86_400_000),
+  };
+}

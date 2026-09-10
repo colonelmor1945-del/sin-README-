@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { ProvenanceTag } from "@/components/ProvenanceTag";
 import { cx } from "@/components/ui/primitives";
-import { LAUNCH, countdownFrom, type Countdown } from "@/lib/data/launch";
+import { LAUNCH, countdownFrom, waitProgress, type Countdown } from "@/lib/data/launch";
 
 /**
  * Launch countdown.
@@ -75,6 +75,8 @@ export function LaunchCountdown({
         <Unit label="Seconds" value={value?.seconds} pad big ticking />
       </div>
 
+      <Progress />
+
       <p className="mt-4 max-w-[62ch] text-[12px] leading-relaxed text-ink-faint">
         {unconfirmed ? (
           <>
@@ -109,6 +111,81 @@ export function LaunchCountdown({
     </div>
   );
 }
+
+/**
+ * How far through the announced wait we are.
+ *
+ * The digits say how long is left. This says how far you have come, which is
+ * the half people actually feel, and it is the reason the block earns its
+ * space rather than being decoration under a clock.
+ *
+ * It keeps its own clock instead of taking the one that drives the digits.
+ * That looks like duplication and is not: the bar animates its fill over 1.4
+ * seconds, and a prop that changes every second restarts that animation before
+ * it can finish, so the bar creeps toward its value and never arrives. Ticking
+ * once a minute is both plenty for a bar measured in days and enough to let the
+ * fill complete. It is memoised for the same reason: it takes no props, and
+ * without that the parent re-rendering every second hands motion a fresh
+ * animate target each tick, which restarts the fill just as surely.
+ */
+const Progress = memo(function Progress() {
+  const reduce = useReducedMotion();
+  const [now, setNow] = useState<number | null>(null);
+
+  useEffect(() => {
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Before hydration, the track alone. Rendering a number here would be a
+  // hydration mismatch for the same reason the digits do not render one.
+  if (now === null) {
+    return <div className="mt-6 h-[3px] max-w-[62ch] rounded-full bg-line" />;
+  }
+
+  const { fraction, elapsedDays, totalDays } = waitProgress(now);
+  const target = new Date(LAUNCH.target).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  return (
+    <div className="mt-6 max-w-[62ch]">
+      <div className="flex items-baseline justify-between gap-4 text-[11px]">
+        <span className="text-ink-faint">
+          <span className="tabular text-ink-muted">
+            {Math.round(fraction * 100)}%
+          </span>{" "}
+          of the wait done
+        </span>
+        <span className="tabular text-ink-faint">{target}</span>
+      </div>
+
+      <div className="mt-2 h-[3px] w-full overflow-hidden rounded-full bg-line">
+        <motion.div
+          className="h-full w-full rounded-full"
+          style={{
+            background:
+              "linear-gradient(90deg, #ff2d78 0%, #c657ff 60%, #ffa64d 100%)",
+            transformOrigin: "left",
+          }}
+          // A transform, not a layout property. Animating the width as a
+          // percentage did not move at all here; the bar only crept forward
+          // when something else re-rendered it.
+          initial={reduce ? false : { scaleX: 0 }}
+          animate={{ scaleX: fraction }}
+          transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
+        />
+      </div>
+
+      <p className="tabular mt-1.5 text-[11px] text-ink-faint">
+        Day {elapsedDays} of {totalDays} since the date was announced
+      </p>
+    </div>
+  );
+});
 
 /**
  * One unit of the clock.
