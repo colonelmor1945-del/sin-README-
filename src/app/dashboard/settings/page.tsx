@@ -1,10 +1,13 @@
 import Link from "next/link";
 
 import { PageHeader } from "@/components/app/PageHeader";
+import { CreditPacks } from "@/components/app/CreditPacks";
+import { SupporterBadge } from "@/components/app/SupporterBadge";
 import { Button, ButtonLink, Panel, PanelHead } from "@/components/ui/primitives";
 import { switchTier } from "@/app/dashboard/settings/actions";
 import { requireSession } from "@/lib/auth/session";
 import { getAiProvider } from "@/lib/ai";
+import { googleConfigured } from "@/lib/auth/google";
 import { getStore } from "@/lib/db/store";
 import { CREDIT_COST, TIERS } from "@/lib/entitlements";
 import { PROVIDERS } from "@/lib/payments";
@@ -23,6 +26,8 @@ export default async function SettingsPage() {
   const provider = getAiProvider();
   const tiers: Tier[] = ["free", "pro", "elite"];
   const isDev = process.env.NODE_ENV !== "production";
+  const hasDatabase = Boolean(process.env.DATABASE_URL);
+  const googleOn = googleConfigured();
 
   return (
     <>
@@ -113,6 +118,14 @@ export default async function SettingsPage() {
               </p>
             </div>
           </Panel>
+          <CreditPacks configured={PROVIDERS.some((p) => p.configured)} />
+
+          {/*
+            Badge level is null until a contribution is recorded, which the
+            payment webhook will set. Passing null renders the explanation
+            rather than a badge nobody has earned.
+          */}
+          <SupporterBadge level={null} />
         </div>
 
         <div className="space-y-4">
@@ -135,8 +148,16 @@ export default async function SettingsPage() {
                   ok={p.configured}
                 />
               ))}
-              <Row label="Database" value="In-memory, development" ok={false} />
-              <Row label="Authentication" value="Anonymous session" ok={false} />
+              <Row
+                label="Database"
+                value={hasDatabase ? "PostgreSQL" : "In-memory, development"}
+                ok={hasDatabase}
+              />
+              <Row
+                label="Sign in"
+                value={googleOn ? "Email and Google" : "Email and password"}
+                ok
+              />
             </dl>
             <p className="mt-4 border-t border-line pt-3 text-[11px] leading-relaxed text-ink-faint">
               Anything marked as not configured falls back to a safe local

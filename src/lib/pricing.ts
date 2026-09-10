@@ -234,3 +234,45 @@ export function annualSaving(tier: Tier): number {
   if (monthlyMinor === 0) return 0;
   return 1 - yearlyMinor / (monthlyMinor * 12);
 }
+
+/* Credit packs ----------------------------------------------------------- */
+
+/**
+ * One-off credit purchases, for people who do not want a subscription or who
+ * run out mid-month.
+ *
+ * Priced so the per-credit rate falls as the pack grows, but never below what
+ * the same credits cost inside a subscription. A pack that undercuts the
+ * subscription trains your paying customers to cancel and buy packs instead.
+ */
+export interface CreditPack {
+  id: string;
+  credits: number;
+  priceMinor: number;
+  /** Shown so the comparison between packs is honest and immediate. */
+  perCreditMinor: number;
+  bestValue?: boolean;
+}
+
+const pack = (id: string, credits: number, priceMinor: number, bestValue = false): CreditPack => ({
+  id,
+  credits,
+  priceMinor,
+  perCreditMinor: Math.round((priceMinor / credits) * 100) / 100,
+  bestValue,
+});
+
+export const CREDIT_PACKS: CreditPack[] = [
+  pack("pack-10", 10, 299),
+  pack("pack-50", 50, 1199, true),
+  pack("pack-100", 100, 1999),
+];
+
+export const creditPackById = (id: string) => CREDIT_PACKS.find((p) => p.id === id);
+
+/**
+ * Credits bought in a pack never expire, unlike the monthly subscription
+ * grant. Stated here because it is a product promise, not an implementation
+ * detail, and the UI has to say it.
+ */
+export const PACK_CREDITS_EXPIRE = false;
