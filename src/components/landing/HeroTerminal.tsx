@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ProvenanceTag } from "@/components/ProvenanceTag";
 import { Sparkline } from "@/components/ui/charts";
 import { effectiveHourly, paybackDays, rankAssetsByEfficiency, sortMissions, trendDelta } from "@/lib/calc";
@@ -20,7 +21,14 @@ export function HeroTerminal() {
   const delta = trendDelta(topAsset);
 
   return (
-    <div className="panel overflow-hidden">
+    // The whole terminal is the target. It is a read-only display with no
+    // controls of its own, it is the most clickable-looking thing on the page,
+    // and it was inert.
+    <Link
+      href="/dashboard/missions"
+      aria-label="Open the mission list"
+      className="panel neon-hit block overflow-hidden"
+    >
       <header className="flex items-center justify-between border-b border-line px-4 py-3">
         <span className="text-[11px] font-medium text-ink-muted">
           Money per hour, risk adjusted
@@ -77,6 +85,6 @@ export function HeroTerminal() {
           </span>
         </div>
       </footer>
-    </div>
+    </Link>
   );
 }

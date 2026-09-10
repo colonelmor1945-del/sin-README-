@@ -53,18 +53,44 @@ export function ButtonLink({
 
 /* Panels ----------------------------------------------------------------- */
 
+/**
+ * A panel, optionally a link.
+ *
+ * Given an href it renders as an anchor rather than a section, so the whole
+ * card is one target instead of a card with a link buried in it. That is the
+ * difference between a panel that looks clickable and one that is: the
+ * keyboard reaches it, the browser shows the destination on hover, middle
+ * click opens a tab, and the hit area is the whole card rather than six words
+ * of it.
+ *
+ * `label` is there because a card is usually a heading plus a paragraph plus
+ * some numbers, and a screen reader announcing all of that as the link text is
+ * unusable. It names the destination in a few words instead.
+ */
 export function Panel({
   className,
   children,
   quiet,
+  href,
+  label,
 }: {
   className?: string;
   children: ReactNode;
   quiet?: boolean;
+  href?: string;
+  label?: string;
 }) {
-  return (
-    <section className={cx(quiet ? "panel-quiet" : "panel", className)}>{children}</section>
-  );
+  const classes = cx(quiet ? "panel-quiet" : "panel", href && "neon-hit block", className);
+
+  if (href) {
+    return (
+      <Link href={href} className={classes} aria-label={label}>
+        {children}
+      </Link>
+    );
+  }
+
+  return <section className={classes}>{children}</section>;
 }
 
 export function PanelHead({

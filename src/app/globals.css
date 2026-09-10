@@ -214,3 +214,89 @@ body {
   background-attachment: fixed;
   background-repeat: no-repeat;
 }
+
+/*
+ * Neon.
+ *
+ * Three effects, all of them tied to something the reader is doing rather
+ * than running on their own. The brief asks for neon; a page that pulses at
+ * you while you try to read a payout table is not neon, it is noise.
+ */
+
+/* 1. The spotlight. Position comes from PanelSpotlight, which writes --spot-x
+      and --spot-y onto whichever panel the pointer is over. Panels need a
+      stacking context and a clip for the glow to sit inside their radius. */
+.panel,
+.panel-quiet {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition:
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.panel::after,
+.panel-quiet::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--spot-on, 0);
+  transition: opacity 260ms ease;
+  background: radial-gradient(
+    22rem 22rem at var(--spot-x, 50%) var(--spot-y, 50%),
+    rgb(255 45 120 / 0.13) 0%,
+    rgb(150 87 255 / 0.07) 38%,
+    transparent 70%
+  );
+}
+
+.panel:hover,
+.panel-quiet:hover {
+  border-color: var(--color-line-strong);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 18px 48px rgb(4 2 10 / 0.6),
+    0 0 26px -6px rgb(255 45 120 / 0.28);
+}
+
+/* 2. Anything that is actually clickable says so by lifting and lighting up.
+      Applied to the element, not to a wrapper, so the whole target reacts. */
+.neon-hit {
+  transition:
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.neon-hit:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 22px -4px rgb(255 45 120 / 0.45);
+}
+
+.neon-hit:active {
+  transform: translateY(0);
+}
+
+/* 3. Section seams. A hairline is invisible against a dark page; a hairline
+      that catches the light in the middle reads as an edge. */
+.neon-seam {
+  border: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 45 120 / 0.35) 28%,
+    rgb(150 87 255 / 0.4) 52%,
+    transparent 100%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neon-hit:hover {
+    transform: none;
+  }
+}

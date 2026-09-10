@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "audit:mobile": "node scripts/audit-mobile.mjs"
+    "audit:mobile": "node scripts/audit-mobile.mjs",
+    "build:check": "node scripts/build-check.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",

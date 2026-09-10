@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
@@ -23,6 +24,8 @@ export interface Slide {
   label: string;
   headline: string;
   blurb: string;
+  /** Where this screen actually lives. Rendered as the way in. */
+  href: string;
   content: ReactNode;
 }
 
@@ -99,7 +102,22 @@ export function ProductSlides({ slides }: { slides: Slide[] }) {
             </p>
           </motion.div>
 
-          <p className="mt-6 text-[11px] text-ink-faint">
+          {/*
+            The panel beside this is the real screen, so there has to be a way
+            to go and use it. Without this the section is a product tour that
+            leads nowhere.
+          */}
+          <Link
+            href={active.href}
+            className="group mt-6 inline-flex items-center gap-2 text-[13px] font-medium text-accent underline-offset-4 hover:underline"
+          >
+            Open {active.label.toLowerCase()}
+            <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
+              &rarr;
+            </span>
+          </Link>
+
+          <p className="mt-4 text-[11px] text-ink-faint">
             Every panel here is the real component, running on the real dataset.
             Nothing on this page is a screenshot.
           </p>

@@ -3,6 +3,7 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 
 import "./globals.css";
+import { PanelSpotlight } from "@/components/PanelSpotlight";
 
 export const metadata: Metadata = {
   title: {
@@ -27,7 +28,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* One pointermove listener for the whole page. Draws the neon
+            spotlight that follows the cursor across panels. */}
+        <PanelSpotlight />
+      </body>
     </html>
   );
 }

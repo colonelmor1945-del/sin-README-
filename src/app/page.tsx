@@ -234,6 +234,7 @@ function Screens() {
             slides={[
               {
                 id: "missions",
+                href: "/dashboard/missions",
                 label: "Mission intelligence",
                 headline: "Sorted by what it pays, not what it looks like.",
                 blurb:
@@ -242,6 +243,7 @@ function Screens() {
               },
               {
                 id: "economy",
+                href: "/dashboard/economy",
                 label: "Economy tracker",
                 headline: "Payback period beats sticker price.",
                 blurb:
@@ -250,6 +252,7 @@ function Screens() {
               },
               {
                 id: "plan",
+                href: "/dashboard/plan",
                 label: "Money plan",
                 headline: "An ordered route, split by horizon.",
                 blurb:
@@ -258,6 +261,7 @@ function Screens() {
               },
               {
                 id: "map",
+                href: "/dashboard/map",
                 label: "Intelligence map",
                 headline: "Every earner on one map.",
                 blurb:
@@ -289,7 +293,11 @@ function Capabilities() {
 
         <div className="mt-14 grid gap-4 lg:grid-cols-3 lg:grid-rows-2">
           <Reveal className="lg:col-span-2 lg:row-span-2">
-            <Panel className="flex h-full flex-col overflow-hidden">
+            <Panel
+              className="flex h-full flex-col overflow-hidden"
+              href="/dashboard/assistant"
+              label="Open the AI assistant"
+            >
               <div className="relative aspect-[16/8] w-full overflow-hidden">
                 <Image
                   src="https://picsum.photos/seed/vice-city-skyline-neon-dusk/1600/800"
@@ -327,7 +335,11 @@ function Capabilities() {
           </Reveal>
 
           <Reveal delay={0.08}>
-            <Panel className="h-full p-6">
+            <Panel
+              className="h-full p-6"
+              href="/dashboard/plan"
+              label="Open the money plan generator"
+            >
               <h3 className="text-base font-semibold text-ink">Money plan generator</h3>
               <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
                 An ordered route from your balance to your goal. Every step
@@ -351,6 +363,8 @@ function Capabilities() {
             <Panel
               className="h-full p-6"
               quiet
+              href="/dashboard/economy"
+              label="Open the economy tracker"
             >
               <h3 className="text-base font-semibold text-ink">Economy tracker</h3>
               <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
