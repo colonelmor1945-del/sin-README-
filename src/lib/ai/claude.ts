@@ -137,6 +137,20 @@ Rules:
 - The hook is the first spoken line of the video. One sentence.
 - The thumbnail concept describes a real composition, not a mood.
 - SEO keywords are what a player would actually type into search.
+
+The script is the important part:
+- Every number spoken in it must come from the dataset above. If a beat needs a
+  figure that is not there, rewrite the beat rather than inventing one.
+- Beat one is the hook and runs under 5 seconds. Nobody watches past it
+  otherwise.
+- narration is what the creator says out loud. Write it to be read, not to be
+  scanned: short sentences, no bullet fragments, no stage directions.
+- onScreen is what the viewer is looking at during that beat. Be concrete about
+  the shot, not the mood.
+- Include one beat that states the data is community-reported and unverified.
+  A creator who quotes this platform should be quoting the confidence too.
+- Timestamps run in order and the last one plus its length equals
+  runtimeSeconds.
 - No emoji, no em dashes.`,
         },
       ],

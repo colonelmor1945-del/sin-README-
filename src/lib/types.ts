@@ -121,6 +121,16 @@ export interface MoneyPlan {
   createdAt: string;
 }
 
+export interface ScriptBeat {
+  /** Seconds from the start of the video. */
+  at: number;
+  label: string;
+  /** What the creator says, written to be read aloud. */
+  narration: string;
+  /** What is on screen while they say it. */
+  onScreen: string;
+}
+
 export interface CreatorIdea {
   topic: string;
   momentum: number;
@@ -129,6 +139,8 @@ export interface CreatorIdea {
   hook: string;
   angle: string;
   seoKeywords: string[];
+  script: ScriptBeat[];
+  runtimeSeconds: number;
   provenance: Provenance;
 }
 

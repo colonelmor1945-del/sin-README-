@@ -167,6 +167,28 @@ function IdeaCard({ idea }: { idea: CreatorIdea }) {
           </ul>
         </Block>
 
+        <Block label={`Script, ${formatRuntime(idea.runtimeSeconds)}`}>
+          <ol className="divide-y divide-line/70 overflow-hidden rounded-[10px] border border-line">
+            {idea.script.map((beat) => (
+              <li key={beat.at} className="bg-surface-2 p-3.5">
+                <div className="flex items-baseline gap-3">
+                  <span className="tabular shrink-0 text-[11px] text-accent">
+                    {formatRuntime(beat.at)}
+                  </span>
+                  <span className="text-[11px] text-ink-faint">{beat.label}</span>
+                </div>
+                <p className="mt-2 text-[13px] leading-relaxed text-ink">
+                  {beat.narration}
+                </p>
+                <p className="mt-1.5 text-[12px] leading-relaxed text-ink-faint">
+                  On screen: {beat.onScreen}
+                </p>
+              </li>
+            ))}
+          </ol>
+          <CopyScript idea={idea} />
+        </Block>
+
         <Block label="Thumbnail concept">
           <p className="text-[13px] leading-relaxed text-ink-muted">
             {idea.thumbnailConcept}
@@ -191,6 +213,52 @@ function IdeaCard({ idea }: { idea: CreatorIdea }) {
         </Block>
       </div>
     </Panel>
+  );
+}
+
+/** 95 becomes "1:35". Timestamps read as timestamps, not as raw seconds. */
+function formatRuntime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const sec = seconds % 60;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+/**
+ * Copies the script as plain text.
+ *
+ * Creators paste this into a teleprompter or a doc, so the clipboard format
+ * is the narration with its timestamps, not the JSON behind it.
+ */
+function CopyScript({ idea }: { idea: CreatorIdea }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    const text = [
+      idea.topic,
+      "",
+      ...idea.script.flatMap((beat) => [
+        `[${formatRuntime(beat.at)}] ${beat.label}`,
+        beat.narration,
+        `On screen: ${beat.onScreen}`,
+        "",
+      ]),
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can be refused. Saying so beats a button that
+      // silently does nothing.
+      setCopied(false);
+    }
+  }
+
+  return (
+    <Button size="sm" variant="outline" onClick={copy} className="mt-3">
+      {copied ? "Copied" : "Copy script"}
+    </Button>
   );
 }
 
