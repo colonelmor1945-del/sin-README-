@@ -21,13 +21,32 @@ restart, and finding that out after launch is not recoverable.
 Free tiers that fit: **neon.tech** or **supabase.com**. Either gives a Postgres
 connection string on the free plan.
 
-Once you have one:
+### Applying the schema
+
+**Without installing anything.** Both Neon and Supabase have a SQL editor in
+the browser. Open `src/lib/db/schema.sql`, copy the whole file, paste, run.
+This is the easier path and it needs no tools at all.
+
+**Or with psql**, if you have it:
 
 ```bash
 psql "$DATABASE_URL" -f src/lib/db/schema.sql
 ```
 
-That creates the tables once. The first account to register becomes admin.
+`psql` does not ship with Windows and is not installed here, so use the browser
+editor unless you have already installed the PostgreSQL client.
+
+Either way it creates 23 tables, and the first account to register becomes
+admin.
+
+**It is safe to run twice.** Every statement is guarded, so if the connection
+drops half way through you can paste it again rather than dropping the database
+and starting over. There are tests that apply the real file to a real
+PostgreSQL — compiled to WebAssembly, so they need no server — and assert
+exactly that.
+
+It requires **PostgreSQL 13 or newer** and no extensions. Neon and Supabase are
+both well past that.
 
 ## 2. A host
 

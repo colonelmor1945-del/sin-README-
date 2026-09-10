@@ -8,29 +8,76 @@
 --  * Payment state transitions are append-only in payment_events. The status
 --    column on payments is a materialised view of the latest event.
 --  * No table stores private keys, seed phrases, or plaintext passwords.
+--
+-- Safe to run more than once. Every statement is guarded, so a run that fails
+-- part way through can simply be run again rather than leaving a half-built
+-- database that has to be dropped. Enums need a DO block for this because
+-- PostgreSQL has no CREATE TYPE IF NOT EXISTS.
+--
+-- It does NOT migrate. Adding a column to a table that already exists needs
+-- its own ALTER; this file only ever creates what is missing.
 
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- No extensions.
+--
+-- This used to create pgcrypto, which was not needed: the only function taken
+-- from it was gen_random_uuid(), and that has been in PostgreSQL core since
+-- version 13. Password hashing happens in the application with scrypt, never
+-- in the database. Requiring an extension for nothing narrows the set of
+-- managed hosts this will apply cleanly to, and several restrict them.
+--
+-- Minimum: PostgreSQL 13.
 
 -- ---------------------------------------------------------------- enums ----
 
-CREATE TYPE plan_tier          AS ENUM ('free', 'pro', 'elite');
-CREATE TYPE subscription_state AS ENUM ('none', 'trialing', 'active', 'past_due', 'canceled');
-CREATE TYPE provenance         AS ENUM ('verified', 'community', 'estimated', 'ai_projection');
-CREATE TYPE asset_kind         AS ENUM ('business', 'property', 'vehicle', 'service');
-CREATE TYPE plan_strategy      AS ENUM ('fastest_money', 'safest', 'max_profit', 'low_investment', 'solo', 'multiplayer');
-CREATE TYPE money_plan_state   AS ENUM ('draft', 'active', 'completed', 'abandoned');
-CREATE TYPE message_role       AS ENUM ('user', 'assistant', 'system');
-CREATE TYPE payment_status     AS ENUM ('pending', 'processing', 'confirmed', 'failed', 'expired', 'refunded');
-CREATE TYPE payment_kind       AS ENUM ('subscription', 'credit_pack', 'support_contribution');
-CREATE TYPE supporter_level    AS ENUM ('supporter', 'early_supporter', 'founding_supporter');
-CREATE TYPE credit_entry_kind  AS ENUM ('grant', 'purchase', 'spend', 'refund', 'admin_adjustment');
-CREATE TYPE user_role          AS ENUM ('member', 'editor', 'admin');
+DO $$ BEGIN
+  CREATE TYPE plan_tier AS ENUM ('free', 'pro', 'elite');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE subscription_state AS ENUM ('none', 'trialing', 'active', 'past_due', 'canceled');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE provenance AS ENUM ('verified', 'community', 'estimated', 'ai_projection');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE asset_kind AS ENUM ('business', 'property', 'vehicle', 'service');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE plan_strategy AS ENUM ('fastest_money', 'safest', 'max_profit', 'low_investment', 'solo', 'multiplayer');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE money_plan_state AS ENUM ('draft', 'active', 'completed', 'abandoned');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE message_role AS ENUM ('user', 'assistant', 'system');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE payment_status AS ENUM ('pending', 'processing', 'confirmed', 'failed', 'expired', 'refunded');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE payment_kind AS ENUM ('subscription', 'credit_pack', 'support_contribution');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE supporter_level AS ENUM ('supporter', 'early_supporter', 'founding_supporter');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE credit_entry_kind AS ENUM ('grant', 'purchase', 'spend', 'refund', 'admin_adjustment');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('member', 'editor', 'admin');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ---------------------------------------------------------------- users ----
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email               CITEXT UNIQUE NOT NULL,
+  -- TEXT, not CITEXT. CITEXT needs an extension that this file never created,
+  -- so applying the schema failed here on any host that did not happen to have
+  -- it already. The application lowercases the address on every read and every
+  -- write, so the case insensitivity was already handled above the database.
+  -- The CHECK turns that convention into something the database enforces, so a
+  -- future code path that forgets to normalise fails loudly instead of quietly
+  -- creating a second account for the same person.
+  email               TEXT UNIQUE NOT NULL CHECK (email = lower(email)),
   username            TEXT UNIQUE NOT NULL CHECK (char_length(username) BETWEEN 3 AND 32),
   -- Which mechanism created this account: 'password' or 'google'.
   auth_provider       TEXT NOT NULL,
@@ -54,7 +101,7 @@ CREATE TABLE users (
   UNIQUE (auth_provider, auth_subject)
 );
 
-CREATE INDEX users_plan_idx ON users (plan) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS users_plan_idx ON users (plan) WHERE deleted_at IS NULL;
 
 -- ------------------------------------------------------------- sessions ----
 
@@ -62,7 +109,7 @@ CREATE INDEX users_plan_idx ON users (plan) WHERE deleted_at IS NULL;
 -- dump cannot be replayed as a live session. Nothing about the user, their
 -- tier or their role travels in the cookie, so a tampered cookie can only
 -- ever be invalid rather than privileged.
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
   token_hash  TEXT PRIMARY KEY,
   user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   expires_at  TIMESTAMPTZ NOT NULL,
@@ -73,12 +120,12 @@ CREATE TABLE sessions (
   user_agent  TEXT
 );
 
-CREATE INDEX sessions_user_idx ON sessions (user_id);
+CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id);
 -- Expiry is filtered on read as well, so a stalled cleanup job can never
 -- resurrect a session. This index serves the sweep, not correctness.
-CREATE INDEX sessions_expiry_idx ON sessions (expires_at);
+CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions (expires_at);
 
-CREATE TABLE user_profiles (
+CREATE TABLE IF NOT EXISTS user_profiles (
   user_id        UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   -- In-game dollars. Not real money.
   current_money  BIGINT NOT NULL DEFAULT 0 CHECK (current_money >= 0),
@@ -90,7 +137,7 @@ CREATE TABLE user_profiles (
 
 -- ------------------------------------------------------------ game data ----
 
-CREATE TABLE assets (
+CREATE TABLE IF NOT EXISTS assets (
   id            TEXT PRIMARY KEY,
   name          TEXT NOT NULL,
   kind          asset_kind NOT NULL,
@@ -108,7 +155,7 @@ CREATE TABLE assets (
 );
 
 -- Time series behind the economy tracker. One row per observation.
-CREATE TABLE asset_prices (
+CREATE TABLE IF NOT EXISTS asset_prices (
   id          BIGSERIAL PRIMARY KEY,
   asset_id    TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
   price       BIGINT NOT NULL,
@@ -116,9 +163,9 @@ CREATE TABLE asset_prices (
   provenance  provenance NOT NULL
 );
 
-CREATE INDEX asset_prices_asset_time_idx ON asset_prices (asset_id, observed_at DESC);
+CREATE INDEX IF NOT EXISTS asset_prices_asset_time_idx ON asset_prices (asset_id, observed_at DESC);
 
-CREATE TABLE missions (
+CREATE TABLE IF NOT EXISTS missions (
   id             TEXT PRIMARY KEY,
   name           TEXT NOT NULL,
   strand         TEXT NOT NULL,
@@ -138,9 +185,9 @@ CREATE TABLE missions (
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX missions_payout_idx ON missions (payout DESC) WHERE published;
+CREATE INDEX IF NOT EXISTS missions_payout_idx ON missions (payout DESC) WHERE published;
 
-CREATE TABLE map_locations (
+CREATE TABLE IF NOT EXISTS map_locations (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL,
   kind        TEXT NOT NULL,
@@ -155,9 +202,9 @@ CREATE TABLE map_locations (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX map_locations_kind_idx ON map_locations (kind) WHERE published;
+CREATE INDEX IF NOT EXISTS map_locations_kind_idx ON map_locations (kind) WHERE published;
 
-CREATE TABLE user_assets (
+CREATE TABLE IF NOT EXISTS user_assets (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   asset_id    TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
@@ -165,7 +212,7 @@ CREATE TABLE user_assets (
   UNIQUE (user_id, asset_id)
 );
 
-CREATE TABLE user_missions (
+CREATE TABLE IF NOT EXISTS user_missions (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   mission_id   TEXT NOT NULL REFERENCES missions(id) ON DELETE CASCADE,
@@ -175,7 +222,7 @@ CREATE TABLE user_missions (
 
 -- ----------------------------------------------------------- money plans ---
 
-CREATE TABLE money_plans (
+CREATE TABLE IF NOT EXISTS money_plans (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   goal          BIGINT NOT NULL,
@@ -190,11 +237,13 @@ CREATE TABLE money_plans (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX money_plans_user_idx ON money_plans (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS money_plans_user_idx ON money_plans (user_id, created_at DESC);
 
-CREATE TYPE plan_horizon AS ENUM ('short', 'medium', 'long');
+DO $$ BEGIN
+  CREATE TYPE plan_horizon AS ENUM ('short', 'medium', 'long');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TABLE money_plan_steps (
+CREATE TABLE IF NOT EXISTS money_plan_steps (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   plan_id       UUID NOT NULL REFERENCES money_plans(id) ON DELETE CASCADE,
   step_order    INT NOT NULL,
@@ -212,16 +261,16 @@ CREATE TABLE money_plan_steps (
 
 -- ------------------------------------------------------ ai conversations ---
 
-CREATE TABLE ai_conversations (
+CREATE TABLE IF NOT EXISTS ai_conversations (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title      TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX ai_conversations_user_idx ON ai_conversations (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ai_conversations_user_idx ON ai_conversations (user_id, created_at DESC);
 
-CREATE TABLE ai_messages (
+CREATE TABLE IF NOT EXISTS ai_messages (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
   role            message_role NOT NULL,
@@ -234,10 +283,10 @@ CREATE TABLE ai_messages (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX ai_messages_conversation_idx ON ai_messages (conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS ai_messages_conversation_idx ON ai_messages (conversation_id, created_at);
 
 -- Rolling counter behind the free-tier daily quota. Cheap to check.
-CREATE TABLE ai_usage_daily (
+CREATE TABLE IF NOT EXISTS ai_usage_daily (
   user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   usage_day DATE NOT NULL,
   queries   INT  NOT NULL DEFAULT 0,
@@ -246,7 +295,7 @@ CREATE TABLE ai_usage_daily (
 
 -- --------------------------------------------------------------- credits ---
 
-CREATE TABLE lab_credits (
+CREATE TABLE IF NOT EXISTS lab_credits (
   user_id    UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   balance    INT NOT NULL DEFAULT 0 CHECK (balance >= 0),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -254,7 +303,7 @@ CREATE TABLE lab_credits (
 
 -- Append-only ledger. lab_credits.balance is the running total and must only
 -- ever be updated in the same transaction that inserts here.
-CREATE TABLE credit_transactions (
+CREATE TABLE IF NOT EXISTS credit_transactions (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   amount      INT NOT NULL CHECK (amount <> 0),
@@ -265,11 +314,11 @@ CREATE TABLE credit_transactions (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX credit_transactions_user_idx ON credit_transactions (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS credit_transactions_user_idx ON credit_transactions (user_id, created_at DESC);
 
 -- -------------------------------------------------------------- payments ---
 
-CREATE TABLE payments (
+CREATE TABLE IF NOT EXISTS payments (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id        UUID REFERENCES users(id) ON DELETE SET NULL,
   provider       TEXT NOT NULL,
@@ -287,10 +336,10 @@ CREATE TABLE payments (
   UNIQUE (idempotency_key)
 );
 
-CREATE INDEX payments_user_idx ON payments (user_id, created_at DESC);
-CREATE INDEX payments_status_idx ON payments (status) WHERE status IN ('pending', 'processing');
+CREATE INDEX IF NOT EXISTS payments_user_idx ON payments (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS payments_status_idx ON payments (status) WHERE status IN ('pending', 'processing');
 
-CREATE TABLE crypto_payments (
+CREATE TABLE IF NOT EXISTS crypto_payments (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   payment_id            UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
   asset                 TEXT NOT NULL,            -- BTC, USDC
@@ -306,7 +355,7 @@ CREATE TABLE crypto_payments (
 );
 
 -- Append-only audit trail. Every webhook and every manual action lands here.
-CREATE TABLE payment_events (
+CREATE TABLE IF NOT EXISTS payment_events (
   id          BIGSERIAL PRIMARY KEY,
   payment_id  UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
   from_status payment_status,
@@ -318,9 +367,9 @@ CREATE TABLE payment_events (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX payment_events_payment_idx ON payment_events (payment_id, created_at);
+CREATE INDEX IF NOT EXISTS payment_events_payment_idx ON payment_events (payment_id, created_at);
 
-CREATE TABLE support_contributions (
+CREATE TABLE IF NOT EXISTS support_contributions (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id         UUID REFERENCES users(id) ON DELETE SET NULL,
   payment_id      UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
@@ -335,7 +384,7 @@ CREATE TABLE support_contributions (
 
 -- ---------------------------------------------------------------- audit ----
 
-CREATE TABLE audit_log (
+CREATE TABLE IF NOT EXISTS audit_log (
   id         BIGSERIAL PRIMARY KEY,
   actor_id   UUID REFERENCES users(id) ON DELETE SET NULL,
   action     TEXT NOT NULL,
@@ -345,14 +394,16 @@ CREATE TABLE audit_log (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX audit_log_actor_idx ON audit_log (actor_id, created_at DESC);
-CREATE INDEX audit_log_action_idx ON audit_log (action, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_log_actor_idx ON audit_log (actor_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_log_action_idx ON audit_log (action, created_at DESC);
 
 -- ------------------------------------------------------------ intel feed ---
 
-CREATE TYPE news_category AS ENUM ('official', 'patch', 'economy', 'rumour', 'community');
+DO $$ BEGIN
+  CREATE TYPE news_category AS ENUM ('official', 'patch', 'economy', 'rumour', 'community');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TABLE news_items (
+CREATE TABLE IF NOT EXISTS news_items (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title        TEXT NOT NULL,
   summary      TEXT NOT NULL,
@@ -370,12 +421,12 @@ CREATE TABLE news_items (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX news_items_feed_idx ON news_items (published_at DESC) WHERE published;
-CREATE INDEX news_items_category_idx ON news_items (category, published_at DESC) WHERE published;
+CREATE INDEX IF NOT EXISTS news_items_feed_idx ON news_items (published_at DESC) WHERE published;
+CREATE INDEX IF NOT EXISTS news_items_category_idx ON news_items (category, published_at DESC) WHERE published;
 
 -- Cross-links an entry to the records it changes, so the economy tracker and
 -- mission pages can surface "why did this number move".
-CREATE TABLE news_item_affects (
+CREATE TABLE IF NOT EXISTS news_item_affects (
   news_id     UUID NOT NULL REFERENCES news_items(id) ON DELETE CASCADE,
   entity_type TEXT NOT NULL CHECK (entity_type IN ('asset', 'mission', 'map_location')),
   entity_id   TEXT NOT NULL,
