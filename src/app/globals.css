@@ -140,3 +140,39 @@ body {
   background: var(--color-line-strong);
   border-radius: 999px;
 }
+
+/*
+ * Marquee bulbs on the countdown cabinet.
+ *
+ * There are 28 of these on screen at once, sitting in the hero above a WebGL
+ * backdrop, so they run one CSS keyframe on a per-bulb delay rather than 28
+ * animated components. Opacity and box-shadow only: nothing here triggers
+ * layout or paint of anything but the bulb itself.
+ */
+@keyframes marquee-bulb {
+  0%,
+  100% {
+    opacity: 0.22;
+    box-shadow: 0 0 0 rgb(255 45 120 / 0);
+  }
+  50% {
+    opacity: 1;
+    box-shadow:
+      0 0 8px rgb(255 214 230 / 0.9),
+      0 0 16px rgb(255 45 120 / 0.75);
+  }
+}
+
+.marquee-bulb {
+  background: radial-gradient(circle at 40% 35%, #fff 0%, #ffd6e6 45%, #ff2d78 100%);
+  animation: marquee-bulb 1.3s ease-in-out infinite;
+}
+
+/* A bulb that flashes is decoration, and decoration is the first thing to go
+   when someone has asked the system not to move things. */
+@media (prefers-reduced-motion: reduce) {
+  .marquee-bulb {
+    animation: none;
+    opacity: 0.5;
+  }
+}
