@@ -9,6 +9,7 @@ import {
   GearSix,
   Lightning,
   MapTrifold,
+  Bell,
   Newspaper,
   PlayCircle,
   Plugs,
@@ -34,6 +35,7 @@ const NAV = [
   { href: "/dashboard/missions", label: "Mission intelligence", icon: Coins },
   { href: "/dashboard/economy", label: "Economy tracker", icon: ChartLineUp },
   { href: "/dashboard/creator", label: "Creator Lab", icon: VideoCamera },
+  { href: "/dashboard/alerts", label: "Alerts", icon: Bell },
   { href: "/dashboard/news", label: "Intel feed", icon: Newspaper },
   { href: "/dashboard/feed", label: "Community feed", icon: PlayCircle },
   { href: "/fund", label: "Fund the Lab", icon: Lightning },
@@ -51,11 +53,13 @@ export function Sidebar({
   tier,
   level,
   credits,
+  alertCount = 0,
 }: {
   username: string;
   tier: Tier;
   level: number;
   credits: number;
+  alertCount?: number;
 }) {
   const pathname = usePathname();
 
@@ -66,7 +70,7 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 overflow-y-auto p-3">
-        <SidebarList items={NAV} pathname={pathname} />
+        <SidebarList items={NAV} pathname={pathname} alertCount={alertCount} />
         <div className="my-3 border-t border-line" />
         <SidebarList items={FOOT} pathname={pathname} />
         <SignOutButton />
@@ -98,9 +102,11 @@ export function Sidebar({
 function SidebarList({
   items,
   pathname,
+  alertCount = 0,
 }: {
   items: readonly { href: string; label: string; icon: React.ElementType }[];
   pathname: string;
+  alertCount?: number;
 }) {
   return (
     <ul className="space-y-0.5">
@@ -120,6 +126,11 @@ function SidebarList({
             >
               <Icon size={17} weight={active ? "fill" : "regular"} />
               {label}
+              {href === "/dashboard/alerts" && alertCount > 0 ? (
+                <span className="tabular ml-auto rounded-full bg-accent px-1.5 text-[10px] leading-[1.4] text-white">
+                  {alertCount > 9 ? "9+" : alertCount}
+                </span>
+              ) : null}
             </Link>
           </li>
         );
