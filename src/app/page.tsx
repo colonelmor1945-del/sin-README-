@@ -14,6 +14,7 @@ import {
   MissionsSlide,
   PlanSlide,
 } from "@/components/landing/slideContent";
+import { StructuredData } from "@/components/StructuredData";
 import { ButtonLink, Panel } from "@/components/ui/primitives";
 import { PROVENANCE_META } from "@/lib/provenance";
 import { TIERS } from "@/lib/entitlements";
@@ -26,6 +27,8 @@ import type { Provenance } from "@/lib/types";
 export default function LandingPage() {
   return (
     <>
+      <StructuredData />
+
       <SiteNav />
       <main>
         <Hero />
