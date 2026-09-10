@@ -72,11 +72,12 @@ export function ShortsFeed({ initial }: { initial: ShortsPage }) {
   if (initial.unconfigured) {
     return (
       <Panel className="px-6 py-16 text-center">
-        <h2 className="text-sm font-medium text-ink">The video feed needs a key</h2>
+        <h2 className="text-sm font-medium text-ink">The video feed is empty</h2>
         <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-ink-muted">
-          Set <span className="tabular text-ink">YOUTUBE_API_KEY</span> in the
-          environment and this fills with GTA 6 Shorts. Until then it stays
-          empty rather than showing placeholder videos.
+          Set <span className="tabular text-ink">YOUTUBE_API_KEY</span> to search
+          the whole of YouTube. Without one this falls back to the official
+          Rockstar channel feed, which is not answering right now. Either way it
+          stays empty rather than showing placeholder videos.
         </p>
       </Panel>
     );
