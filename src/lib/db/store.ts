@@ -1,6 +1,7 @@
 import "server-only";
 
 import { hashPassword } from "@/lib/auth/password";
+import { localDbEnabled } from "@/lib/db/local-postgres";
 import { DEV_ACCOUNT, devSeedAllowed } from "@/lib/db/seed-dev-account";
 import type { CreditReason, MoneyPlan, PlayerProfile, Tier } from "@/lib/types";
 
@@ -281,6 +282,9 @@ export const memoryStore: Store = {
  * for the same reason.
  */
 const devSeed: Promise<void> = (async () => {
+  // The local database seeds itself, in local-postgres.ts, because its account
+  // persists and this one does not.
+  if (localDbEnabled()) return;
   if (!devSeedAllowed()) return;
   if (db.byEmail.has(DEV_ACCOUNT.email)) return;
 
@@ -324,6 +328,16 @@ export function getStore(): Store {
         "DATABASE_URL is not set. The in-memory store loses every account on restart and must not run in production.",
       );
     }
+
+    // A local PGlite database, if one was asked for. Same adapter and the same
+    // SQL as production, so constraint violations and transaction behaviour
+    // show up locally instead of on the deployment.
+    if (localDbEnabled()) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const local = require("@/lib/db/postgres") as typeof import("@/lib/db/postgres");
+      return local.postgresStore;
+    }
+
     return memoryStore;
   }
 

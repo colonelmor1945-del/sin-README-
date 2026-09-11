@@ -31,13 +31,40 @@ Settings shows which provider is live.
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Dev server |
+| `npm run dev` | Dev server, in-memory store |
+| `npm run dev:db` | Dev server on a real PostgreSQL, stored on disk |
 | `npm test` | The full suite |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run build:check` | Production build, into `.next-check` |
 | `npm run preflight` | Says whether this environment can be deployed |
 | `npm run icons` | Regenerates the PWA icons from one SVG |
 | `npm run audit:mobile` | Looks for horizontal overflow at 375px |
+
+### Signing in locally
+
+There is a standing development account, printed on boot:
+
+```
+dev@moneylab.local
+vicecity26
+```
+
+It is an admin, so it reaches `/admin` as well as the dashboard. Three separate
+guards keep it out of anything real: not production, no `DATABASE_URL`, and
+`SEED_DEV_ACCOUNT=0` to switch it off.
+
+`npm run dev` keeps it in memory, so it is recreated on every restart and
+nothing else you do survives one.
+
+**`npm run dev:db` is usually what you want.** It runs a real PostgreSQL —
+PGlite, which is Postgres compiled to WebAssembly — stored in `.data/postgres`,
+with nothing to install and no account anywhere. Accounts, plans and credits
+survive restarts, and the app runs the same `schema.sql` and the same adapter
+that production runs, so a constraint violation or a transaction bug shows up
+on your machine instead of on the deployment. Delete `.data` to start clean.
+
+It is not a deployment target. Production still requires `DATABASE_URL` and
+still refuses to start without it.
 
 ### Three traps, each of which has already cost an afternoon
 

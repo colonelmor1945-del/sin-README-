@@ -33,7 +33,10 @@ export const DEV_ACCOUNT = {
   password: "vicecity26",
 } as const;
 
-export function devSeedAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
+/** Takes a plain record so tests can describe an environment without building one. */
+export function devSeedAllowed(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
   if (env.NODE_ENV === "production") return false;
   if (env.DATABASE_URL) return false;
   if (env.SEED_DEV_ACCOUNT === "0") return false;

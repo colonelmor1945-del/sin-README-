@@ -15,13 +15,13 @@ import { DEV_ACCOUNT, devSeedAllowed } from "@/lib/db/seed-dev-account";
  */
 describe("devSeedAllowed", () => {
   it("allows it in a bare local checkout", () => {
-    expect(devSeedAllowed({} as NodeJS.ProcessEnv)).toBe(true);
-    expect(devSeedAllowed({ NODE_ENV: "development" } as NodeJS.ProcessEnv)).toBe(true);
-    expect(devSeedAllowed({ NODE_ENV: "test" } as NodeJS.ProcessEnv)).toBe(true);
+    expect(devSeedAllowed({})).toBe(true);
+    expect(devSeedAllowed({ NODE_ENV: "development" })).toBe(true);
+    expect(devSeedAllowed({ NODE_ENV: "test" })).toBe(true);
   });
 
   it("refuses in production", () => {
-    expect(devSeedAllowed({ NODE_ENV: "production" } as NodeJS.ProcessEnv)).toBe(false);
+    expect(devSeedAllowed({ NODE_ENV: "production" })).toBe(false);
   });
 
   it("refuses whenever there is a real database, whatever NODE_ENV says", () => {
@@ -29,30 +29,30 @@ describe("devSeedAllowed", () => {
     // staging deployment without it set. A connection string is the better
     // tell, because nobody points one at a throwaway.
     expect(
-      devSeedAllowed({ DATABASE_URL: "postgres://user:pw@host/db" } as NodeJS.ProcessEnv),
+      devSeedAllowed({ DATABASE_URL: "postgres://user:pw@host/db" }),
     ).toBe(false);
 
     expect(
       devSeedAllowed({
         NODE_ENV: "development",
         DATABASE_URL: "postgres://localhost/lab",
-      } as NodeJS.ProcessEnv),
+      }),
     ).toBe(false);
   });
 
   it("can be switched off by hand", () => {
-    expect(devSeedAllowed({ SEED_DEV_ACCOUNT: "0" } as NodeJS.ProcessEnv)).toBe(false);
+    expect(devSeedAllowed({ SEED_DEV_ACCOUNT: "0" })).toBe(false);
   });
 
   it("stays on for any value other than the explicit off switch", () => {
     // "0" and only "0". A vague truthiness check here would mean
     // SEED_DEV_ACCOUNT=false silently leaving it enabled.
-    expect(devSeedAllowed({ SEED_DEV_ACCOUNT: "1" } as NodeJS.ProcessEnv)).toBe(true);
+    expect(devSeedAllowed({ SEED_DEV_ACCOUNT: "1" })).toBe(true);
   });
 
   it("refuses if any single guard says no, not only if all do", () => {
     const productionish = { NODE_ENV: "production", SEED_DEV_ACCOUNT: "1" };
-    expect(devSeedAllowed(productionish as NodeJS.ProcessEnv)).toBe(false);
+    expect(devSeedAllowed(productionish)).toBe(false);
   });
 });
 

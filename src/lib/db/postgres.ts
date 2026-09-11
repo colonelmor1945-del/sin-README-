@@ -1,7 +1,13 @@
 import "server-only";
 
-import { Pool, type PoolClient } from "pg";
+import { Pool } from "pg";
 
+import {
+  localDbEnabled,
+  localPool,
+  type PgClientLike,
+  type PgLike,
+} from "@/lib/db/local-postgres";
 import type { Account, Store } from "@/lib/db/store";
 import { DEFAULT_PROFILE, SIGNUP_CREDITS } from "@/lib/db/store";
 import type {
@@ -38,11 +44,22 @@ import type {
 
 const g = globalThis as { __pgPool?: Pool };
 
-function pool(): Pool {
-  if (g.__pgPool) return g.__pgPool;
+function pool(): PgLike {
+  if (g.__pgPool) return g.__pgPool as unknown as PgLike;
 
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
+    // No connection string, but a local PGlite database is allowed. Every call
+    // site expects pool() to return synchronously, and opening the database is
+    // asynchronous, so this hands back a thin object that awaits it per call
+    // rather than making twenty call sites await a pool.
+    if (localDbEnabled()) {
+      return {
+        query: async (text, values) => (await localPool()).query(text, values),
+        connect: async () => (await localPool()).connect(),
+      } as PgLike;
+    }
+
     throw new Error("DATABASE_URL is not set, so the Postgres adapter cannot start.");
   }
 
@@ -64,10 +81,10 @@ function pool(): Pool {
     console.warn("[postgres] idle client error", error.message);
   });
 
-  return g.__pgPool;
+  return g.__pgPool as unknown as PgLike;
 }
 
-async function transaction<T>(run: (client: PoolClient) => Promise<T>): Promise<T> {
+async function transaction<T>(run: (client: PgClientLike) => Promise<T>): Promise<T> {
   const client = await pool().connect();
   try {
     await client.query("BEGIN");
