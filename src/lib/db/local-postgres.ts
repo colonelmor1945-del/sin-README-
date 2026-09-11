@@ -1,7 +1,5 @@
 import "server-only";
 
-import { readFileSync } from "node:fs";
-
 import { splitSql } from "@/lib/db/split-sql";
 
 /**
@@ -185,6 +183,12 @@ async function seedAccount(db: {
 async function applySchema(db: {
   query: (text: string) => Promise<unknown>;
 }): Promise<void> {
+  // Imported here rather than at the top of the file. postgres.ts imports
+  // localDbEnabled from this module, so a top-level node:fs import travels
+  // into the production bundle even though nothing there ever calls it — and
+  // on a runtime without a filesystem, such as Cloudflare Workers, that is a
+  // bundle-time failure rather than a dead branch.
+  const { readFileSync } = await import("node:fs");
   const sql = readFileSync("src/lib/db/schema.sql", "utf8");
 
   for (const statement of splitSql(sql)) {

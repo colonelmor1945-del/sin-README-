@@ -7,3 +7,5 @@ next-env.d.ts
 *.tsbuildinfo
 .next-check
 .data
+.open-next
+.wrangler

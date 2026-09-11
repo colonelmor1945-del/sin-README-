@@ -1,0 +1,18 @@
+{
+  // Cloudflare Workers deployment.
+  //
+  // Experimental: this exists to find out whether the app can run on Workers
+  // at all. Nothing is deployed from it yet, and Vercel or Netlify remain the
+  // supported paths until docs/cloudflare.md says otherwise.
+  "name": "gta-money-lab",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-01",
+  // nodejs_compat is what supplies node:crypto. Verified in workerd: scrypt,
+  // randomBytes, timingSafeEqual, createHash, createPublicKey and verify are
+  // all present, and scrypt at N=32768 runs in about 78ms.
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  }
+}
