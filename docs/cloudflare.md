@@ -4,7 +4,9 @@ Written 11 September 2026. Everything marked verified below was measured on
 this machine against the real `workerd` runtime, not read in documentation.
 
 **It works.** The app builds for Cloudflare Workers, runs there, and fits the
-free plan's size limit. There is one condition and one open question.
+free plan's size limit. The database driver, TCP and TLS all work inside the
+runtime. There is one condition: password hashing needs the $5/month plan, for
+the reason below.
 
 ---
 
@@ -63,16 +65,31 @@ trade by a wide margin.
 
 ---
 
-## Open: the database connection
+## The database driver: verified as far as it can be without a database
 
-Untested, because it needs a real connection string.
+The app talks to Postgres through `pg`, which opens a TCP socket and then
+negotiates TLS. Both were probed inside `workerd`:
 
-The app talks to Postgres through `pg`, which opens a TCP socket. Workers
-supports TCP, but the well-trodden path on Cloudflare is a driver built for it.
-If `pg` gives trouble, Neon publishes `@neondatabase/serverless` with the same
-API over HTTP, and `src/lib/db/postgres.ts` is the only file that would change.
+```
+pg loads in a Worker                      yes
+TCP connect to a closed port              "cannot connect to the specified
+                                           address" — the socket layer ran
+node:tls available                        yes, tls.connect is a function
+TLS handshake to a real host on 443       secureConnect, authorized = true
+```
 
-This is the next thing to test, and it needs `DATABASE_URL` to exist first.
+The connection error is the informative one. It is workerd's socket layer
+reporting that nothing was listening, not a complaint about an unimplemented
+API, so the driver loaded, ran, and opened a real socket. And the TLS
+handshake completed with the certificate chain validated, which is what Neon
+and Supabase both require.
+
+What is left is the end-to-end connection to a real database, which needs a
+`DATABASE_URL` to exist. Every layer under it works.
+
+If `pg` does turn out to misbehave against a managed host, Neon publishes
+`@neondatabase/serverless` with the same API over HTTP, and
+`src/lib/db/postgres.ts` is the only file that would change.
 
 ---
 
@@ -99,5 +116,11 @@ Deploying needs `npx wrangler deploy`, a Cloudflare account, and
 `DATABASE_URL` and `APP_URL` set as Worker secrets rather than in
 `wrangler.jsonc`, which is committed.
 
-Nothing is deployed yet. Until the database connection is tested, Netlify or
-Vercel remain the paths that are known to work end to end.
+Nothing is deployed yet. The order is:
+
+1. Create the database (Neon or Supabase, free) and apply `schema.sql`.
+2. Set `DATABASE_URL` and `APP_URL` as Worker secrets.
+3. Take Workers Paid, for the CPU reason above. Signing in fails without it,
+   and it fails in a way that looks like a broken form.
+4. `npx wrangler deploy`, then check `/login` actually signs in — that is the
+   one path none of this has been able to exercise without a real database.
