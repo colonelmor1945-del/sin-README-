@@ -51,8 +51,21 @@ export default function LandingPage() {
 function Hero() {
   return (
     <section className="relative overflow-hidden border-b border-line">
-      {/* Real 3D backdrop. Decorative, inert, and it stops when off screen. */}
-      <div className="pointer-events-none absolute inset-0" aria-hidden>
+      {/*
+        Real 3D backdrop. Decorative, inert, and it stops when off screen.
+
+        Capped at one viewport rather than filling the section. The shader
+        frames a horizon: sky at the top, then the sun, the skyline and the
+        water below it. Stretched to the height of a section that had grown to
+        1180px against a 600px window, the only part ever on screen was the
+        sky, and the scene read as a flat pink wash — which is exactly how it
+        was reported. One viewport tall means what the shader composes is what
+        you see, at any window size. The fade at the bottom covers the join.
+      */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-[100dvh] max-h-full"
+        aria-hidden
+      >
         <VicePlayground className="h-full w-full" />
         {/*
           Contrast is bought locally rather than by dimming the whole scene: a
