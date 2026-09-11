@@ -27,6 +27,46 @@ to reason over, so every screen works offline.
 To use Claude, copy `.env.example` to `.env.local` and set `ANTHROPIC_API_KEY`.
 Settings shows which provider is live.
 
+### Scripts
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Dev server |
+| `npm test` | The full suite |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run build:check` | Production build, into `.next-check` |
+| `npm run preflight` | Says whether this environment can be deployed |
+| `npm run icons` | Regenerates the PWA icons from one SVG |
+| `npm run audit:mobile` | Looks for horizontal overflow at 375px |
+
+### Three traps, each of which has already cost an afternoon
+
+**Never run `npm run build` while `npm run dev` is running.** They share
+`.next`, and the build overwrites the assets the dev server is serving. The
+symptom is vicious: pages still compile, requests still return 200, and the
+stylesheet quietly 404s, so every Tailwind class stops applying and the page
+renders unstyled with no error in any log. Use `npm run build:check`, which
+writes to `.next-check` instead. If it has already happened, stop the dev
+server, delete `.next`, start again.
+
+**`psql` is not installed on Windows by default.** To apply the schema, paste
+`src/lib/db/schema.sql` into the SQL editor in the Neon or Supabase console.
+The file is safe to run more than once.
+
+**Most of this app degrades on purpose rather than failing.** No AI key runs
+the deterministic planner, no YouTube key falls back to the Rockstar channel
+feed, no Discord invite hides the widget. Each is a decision, not a fault,
+which means a half-configured checkout looks exactly like a working one until
+you try the one thing that is missing. `npm run preflight` prints what is off
+and what that costs.
+
+### Where things are
+
+- `docs/STATUS.md` — what is built and what is not
+- `docs/deploy.md` — going live without owning a domain
+- `docs/play-store.md` — the PWA to Play Store route, and the trademark risk
+- `docs/platform-viability.md` — why the app stores are a bad deal here
+
 ---
 
 ## The one product rule
