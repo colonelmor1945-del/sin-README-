@@ -1,5 +1,7 @@
 import "server-only";
 
+import { hashPassword } from "@/lib/auth/password";
+import { DEV_ACCOUNT, devSeedAllowed } from "@/lib/db/seed-dev-account";
 import type { CreditReason, MoneyPlan, PlayerProfile, Tier } from "@/lib/types";
 
 /**
@@ -164,6 +166,7 @@ export const memoryStore: Store = {
   },
 
   async findByEmail(email) {
+    await devSeed;
     const id = db.byEmail.get(email.toLowerCase());
     const row = id ? db.rows.get(id) : undefined;
     if (!row) return null;
@@ -171,10 +174,12 @@ export const memoryStore: Store = {
   },
 
   async emailTaken(email) {
+    await devSeed;
     return db.byEmail.has(email.toLowerCase());
   },
 
   async usernameTaken(username) {
+    await devSeed;
     return db.byUsername.has(username.toLowerCase());
   },
 
@@ -187,6 +192,7 @@ export const memoryStore: Store = {
   },
 
   async resolveSession(tokenHash) {
+    await devSeed;
     const session = db.sessions.get(tokenHash);
     if (!session) return null;
     if (session.expiresAt <= Date.now()) {
@@ -262,6 +268,43 @@ export const memoryStore: Store = {
     return { total: db.rows.size, byTier };
   },
 };
+
+/**
+ * Creates the development account once, on first use.
+ *
+ * It has to finish before a sign-in attempt is answered, or the first login
+ * after a restart races the seed and is told the account does not exist. So
+ * every method that reads identity waits on this.
+ *
+ * It calls createUser, which deliberately does NOT wait: a seed that waited
+ * for itself would deadlock. Membership is checked against the map directly
+ * for the same reason.
+ */
+const devSeed: Promise<void> = (async () => {
+  if (!devSeedAllowed()) return;
+  if (db.byEmail.has(DEV_ACCOUNT.email)) return;
+
+  await memoryStore.createUser({
+    email: DEV_ACCOUNT.email,
+    username: DEV_ACCOUNT.username,
+    passwordHash: await hashPassword(DEV_ACCOUNT.password),
+  });
+
+  // Seeded before anyone can register, so it takes the admin role the first
+  // account gets. That is the point: the admin screens are behind that role
+  // and are otherwise the hardest part of the product to reach.
+  console.log(
+    [
+      "",
+      "  Development account ready",
+      `    ${DEV_ACCOUNT.email}`,
+      `    ${DEV_ACCOUNT.password}`,
+      "  Admin. In memory, so it is recreated on every restart.",
+      "  Set SEED_DEV_ACCOUNT=0 to turn it off.",
+      "",
+    ].join("\n"),
+  );
+})();
 
 /**
  * Adapter selection.
