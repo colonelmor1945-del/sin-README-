@@ -63,8 +63,11 @@ Two corollaries that have already caught us out:
 | PostgreSQL schema and adapter | Done. Needs a DATABASE_URL |
 | Spotify playlist embed | Done |
 | Payments | Interface and webhook verification written, no processor |
+| PWA: manifest, icons, service worker, offline page | Done |
+| SEO: robots, sitemap, canonical URLs, structured data | Done |
+| Local PostgreSQL for development, on disk, no install | Done |
 
-Roughly 10,800 lines across 19 pages and 7 API routes.
+17,500 lines across 24 pages and 8 API routes. 118 tests.
 
 ---
 
@@ -116,13 +119,17 @@ week later.
 
 ## Known gaps, stated plainly
 
-- **No tests.** Nothing automated. `src/lib/calc.ts` is pure functions with no
-  I/O and is the obvious place to start, since every number in the product comes
-  from it.
-- **In-memory everything.** Sessions, accounts, rate limits and the Reddit token
-  all live in process memory.
+- **Test coverage is deep in places and absent in others.** 118 tests, and they
+  are concentrated where being wrong is expensive: the formulas in `calc.ts`,
+  pricing, the ingestion trust ceilings, the payment state machine, the service
+  worker's caching rules, and the schema itself against a real PostgreSQL.
+  There is nothing covering the React components or the server actions, so a
+  broken form is still something you find by opening it.
 - **No email.** No verification, no password reset. A forgotten password is
   currently unrecoverable.
+- **Rate limits and the Reddit token still live in process memory**, so they
+  reset on restart and are per-instance. Accounts and sessions no longer do:
+  `npm run dev:db` runs a real PostgreSQL on disk, and production requires one.
 - **No analytics.** The admin panel shows business metrics as unavailable rather
   than as zero, because a zero reads as a measurement.
 
