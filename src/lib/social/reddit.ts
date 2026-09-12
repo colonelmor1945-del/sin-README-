@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cached } from "./cache";
+
 /**
  * Reddit feed.
  *
@@ -53,6 +55,9 @@ export interface RedditFeed {
 export const SUBREDDITS = ["GTA6", "GTA", "gtaonline"] as const;
 
 const UA = "web:gta6-money-lab:0.1 (independent fan companion)";
+
+/** Ten minutes. A hot listing does not reorder faster than a reader reads. */
+const LISTING_TTL_MS = 10 * 60_000;
 
 /**
  * Application-only token, cached in module scope.
@@ -126,6 +131,19 @@ export async function fetchReddit({
   const token = await accessToken();
   if (!token) return fetchRss(subreddit, sort, limit);
 
+  return cached(
+    `reddit:listing:${subreddit}:${sort}:${limit}`,
+    LISTING_TTL_MS,
+    () => loadListing(subreddit, sort, limit, token),
+  );
+}
+
+async function loadListing(
+  subreddit: string,
+  sort: string,
+  limit: number,
+  token: string,
+): Promise<RedditFeed> {
   try {
     const response = await fetch(
       `https://oauth.reddit.com/r/${subreddit}/${sort}?limit=${Math.min(limit, 25)}&raw_json=1`,
@@ -331,6 +349,15 @@ const THREAD_ID = /^[a-z0-9]{4,12}$/;
 
 const MAX_DEPTH = 6;
 
+/**
+ * Five minutes.
+ *
+ * This is the honest number: it is the widest window in which the app can be
+ * showing a comment its author has already deleted on Reddit. A short TTL
+ * bounds that exposure, it does not remove it.
+ */
+const THREAD_TTL_MS = 5 * 60_000;
+
 /** Bodies Reddit leaves behind when a comment is deleted or removed. */
 function isTombstone(body: string): boolean {
   return body === "[deleted]" || body === "[removed]";
@@ -404,6 +431,18 @@ export async function fetchThread({
     return { thread: null, unconfigured: true, failed: false, missing: false };
   }
 
+  // Sort is part of the key: "top" and "new" are different answers.
+  return cached(`reddit:thread:${id}:${sort}`, THREAD_TTL_MS, () =>
+    loadThread(id, sort, limit, token),
+  );
+}
+
+async function loadThread(
+  id: string,
+  sort: string,
+  limit: number,
+  token: string,
+): Promise<RedditThreadResult> {
   try {
     const response = await fetch(
       `https://oauth.reddit.com/comments/${id}?sort=${sort}&limit=${Math.min(limit, 100)}&depth=${MAX_DEPTH}&raw_json=1`,
