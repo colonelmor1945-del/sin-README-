@@ -1,4 +1,5 @@
 import { ArrowSquareOut, ChatCircle, ArrowFatUp } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
 
 import { PageHeader } from "@/components/app/PageHeader";
 import { DiscordPanel } from "@/components/app/DiscordPanel";
@@ -60,10 +61,8 @@ export default async function FeedPage() {
               <ul className="divide-y divide-line/70">
                 {reddit.posts.map((post) => (
                   <li key={post.id} className="px-5 py-3.5">
-                    <a
-                      href={post.permalink}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <Link
+                      href={`/dashboard/feed/thread/${post.id}`}
                       className="group block"
                     >
                       <p className="line-clamp-3 text-[13px] leading-snug text-ink group-hover:text-accent">
@@ -91,7 +90,7 @@ export default async function FeedPage() {
                           </span>
                         ) : null}
                       </div>
-                    </a>
+                    </Link>
                   </li>
                 ))}
               </ul>
