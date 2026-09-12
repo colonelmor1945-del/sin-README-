@@ -274,3 +274,207 @@ export function timeAgo(ms: number, now = Date.now()): string {
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
 }
+
+/* Threads ---------------------------------------------------------------- */
+
+/**
+ * A single comment, already flattened.
+ *
+ * Reddit nests replies arbitrarily deep. Rendering that faithfully on a phone
+ * produces a column six words wide, so the tree is flattened to a `depth`
+ * number that the UI caps when it indents. The shape stays a list, which is
+ * also what makes it trivial to test.
+ */
+export interface RedditComment {
+  id: string;
+  author: string;
+  body: string;
+  score: number;
+  createdAt: number;
+  depth: number;
+  permalink: string;
+  /** Posted by the author of the thread itself. Worth marking in the UI. */
+  isOp: boolean;
+  /** Reddit keeps removed comments in the tree with a tombstone body. */
+  removed: boolean;
+}
+
+export interface RedditThread {
+  id: string;
+  title: string;
+  author: string;
+  subreddit: string;
+  score: number;
+  commentCount: number;
+  createdAt: number;
+  permalink: string;
+  /** Markdown as Reddit stores it. Rendered as plain text, never as HTML. */
+  body: string;
+  flair: string | null;
+  /** Direct image URL for an image post, so the thread reads without leaving. */
+  image: string | null;
+  /** A link post points somewhere else; that destination belongs on screen. */
+  linkUrl: string | null;
+  comments: RedditComment[];
+}
+
+export interface RedditThreadResult {
+  thread: RedditThread | null;
+  unconfigured: boolean;
+  failed: boolean;
+  /** The id looked well formed but Reddit has nothing under it. */
+  missing: boolean;
+}
+
+/** Reddit ids are base36. Anything else must not reach a URL. */
+const THREAD_ID = /^[a-z0-9]{4,12}$/;
+
+const MAX_DEPTH = 6;
+
+/** Bodies Reddit leaves behind when a comment is deleted or removed. */
+function isTombstone(body: string): boolean {
+  return body === "[deleted]" || body === "[removed]";
+}
+
+function walkComments(
+  children: unknown[],
+  op: string,
+  depth: number,
+  out: RedditComment[],
+  limit: number,
+): void {
+  for (const child of children) {
+    if (out.length >= limit) return;
+
+    const node = child as { kind?: string; data?: Record<string, unknown> };
+    // "more" is Reddit's load-more stub, not a comment. It has no body.
+    if (node.kind !== "t1" || !node.data) continue;
+
+    const d = node.data;
+    const body = String(d.body ?? "");
+    const id = String(d.id ?? "");
+    if (!id) continue;
+
+    out.push({
+      id,
+      author: String(d.author ?? "unknown"),
+      body,
+      score: Number(d.score ?? 0),
+      createdAt: Number(d.created_utc ?? 0) * 1000,
+      depth: Math.min(depth, MAX_DEPTH),
+      permalink: `https://www.reddit.com${String(d.permalink ?? "")}`,
+      isOp: String(d.author ?? "") === op && op !== "",
+      removed: isTombstone(body),
+    });
+
+    const replies = d.replies as
+      | { data?: { children?: unknown[] } }
+      | string
+      | undefined;
+    // Reddit sends "" rather than an empty object when there are no replies.
+    if (replies && typeof replies !== "string" && replies.data?.children) {
+      walkComments(replies.data.children, op, depth + 1, out, limit);
+    }
+  }
+}
+
+/**
+ * One thread, with its comments.
+ *
+ * The listing endpoint gives titles and scores; this is the only call that
+ * returns bodies, so it is the only place the app reproduces what somebody
+ * else wrote. Every comment keeps its author and its own permalink, and the
+ * UI links back to the thread, which is what Reddit's terms ask for.
+ */
+export async function fetchThread({
+  id,
+  sort = "top",
+  limit = 60,
+}: {
+  id: string;
+  sort?: "top" | "new" | "confidence";
+  limit?: number;
+}): Promise<RedditThreadResult> {
+  if (!THREAD_ID.test(id)) {
+    return { thread: null, unconfigured: false, failed: false, missing: true };
+  }
+
+  const token = await accessToken();
+  if (!token) {
+    return { thread: null, unconfigured: true, failed: false, missing: false };
+  }
+
+  try {
+    const response = await fetch(
+      `https://oauth.reddit.com/comments/${id}?sort=${sort}&limit=${Math.min(limit, 100)}&depth=${MAX_DEPTH}&raw_json=1`,
+      {
+        headers: { authorization: `Bearer ${token}`, "user-agent": UA },
+        next: { revalidate: 300 },
+      },
+    );
+
+    if (response.status === 404) {
+      return { thread: null, unconfigured: false, failed: false, missing: true };
+    }
+
+    if (!response.ok) {
+      console.warn("[reddit] thread failed", id, response.status);
+      return { thread: null, unconfigured: false, failed: true, missing: false };
+    }
+
+    const body = await response.json();
+    const thread = parseThread(body, id);
+    if (!thread) {
+      return { thread: null, unconfigured: false, failed: false, missing: true };
+    }
+
+    return { thread, unconfigured: false, failed: false, missing: false };
+  } catch (error) {
+    console.warn("[reddit] thread threw", error);
+    return { thread: null, unconfigured: false, failed: true, missing: false };
+  }
+}
+
+/**
+ * Split out from the fetch so the parsing can be tested without a network.
+ *
+ * Reddit answers a comments call with a two-element array: the post on its
+ * own, then the comment forest.
+ */
+export function parseThread(payload: unknown, id: string): RedditThread | null {
+  if (!Array.isArray(payload) || payload.length < 1) return null;
+
+  const postListing = payload[0] as {
+    data?: { children?: { data?: Record<string, unknown> }[] };
+  };
+  const post = postListing?.data?.children?.[0]?.data;
+  if (!post || !post.title) return null;
+
+  const author = String(post.author ?? "unknown");
+  const url = typeof post.url === "string" ? post.url : "";
+  const isSelf = Boolean(post.is_self);
+
+  const comments: RedditComment[] = [];
+  const commentListing = payload[1] as {
+    data?: { children?: unknown[] };
+  } | undefined;
+  if (commentListing?.data?.children) {
+    walkComments(commentListing.data.children, author, 0, comments, 200);
+  }
+
+  return {
+    id: String(post.id ?? id),
+    title: String(post.title),
+    author,
+    subreddit: String(post.subreddit ?? ""),
+    score: Number(post.score ?? 0),
+    commentCount: Number(post.num_comments ?? 0),
+    createdAt: Number(post.created_utc ?? 0) * 1000,
+    permalink: `https://www.reddit.com${String(post.permalink ?? "")}`,
+    body: String(post.selftext ?? ""),
+    flair: (post.link_flair_text as string | null) ?? null,
+    image: !isSelf && /\.(jpg|jpeg|png|gif|webp)$/i.test(url) ? url : null,
+    linkUrl: !isSelf && url && !/\.(jpg|jpeg|png|gif|webp)$/i.test(url) ? url : null,
+    comments,
+  };
+}
