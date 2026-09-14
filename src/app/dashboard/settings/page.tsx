@@ -2,9 +2,11 @@ import Link from "next/link";
 
 import { PageHeader } from "@/components/app/PageHeader";
 import { CreditPacks } from "@/components/app/CreditPacks";
+import { DeleteAccountPanel } from "@/components/app/DeleteAccountPanel";
 import { SupporterBadge } from "@/components/app/SupporterBadge";
 import { Button, ButtonLink, Panel, PanelHead } from "@/components/ui/primitives";
 import { switchTier } from "@/app/dashboard/settings/actions";
+import { deleteAccount } from "@/app/dashboard/settings/delete-account";
 import { requireSession } from "@/lib/auth/session";
 import { getAiProvider } from "@/lib/ai";
 import { googleConfigured } from "@/lib/auth/google";
@@ -19,9 +21,11 @@ export const metadata = { title: "Settings" };
 export default async function SettingsPage() {
   const { userId, account } = await requireSession();
   const store = getStore();
-  const [credits, used] = await Promise.all([
+  const [credits, used, record] = await Promise.all([
     store.getCredits(userId),
     store.getDailyQueries(userId),
+    // Google-only accounts have no password to confirm with.
+    store.findByEmail(account.email),
   ]);
   const provider = getAiProvider();
   const tiers: Tier[] = ["free", "pro", "elite"];
@@ -184,6 +188,12 @@ export default async function SettingsPage() {
               </ButtonLink>
             </Panel>
           ) : null}
+
+          <DeleteAccountPanel
+            username={account.username}
+            hasPassword={Boolean(record?.passwordHash)}
+            action={deleteAccount}
+          />
 
           <p className="px-1 text-[11px] leading-relaxed text-ink-faint">
             Read the{" "}

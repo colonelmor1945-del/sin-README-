@@ -47,6 +47,17 @@ export interface Store {
   upsertAccount(account: Account): Promise<Account>;
   findByEmail(email: string): Promise<(Account & { passwordHash: string }) | null>;
   emailTaken(email: string): Promise<boolean>;
+  /**
+   * Erase a user and everything personal attached to them.
+   *
+   * Not a soft delete and not a flag: the row goes. The schema carries the
+   * rest — everything personal cascades from `users(id)`, while `payments`,
+   * `support_contributions` and `audit_log` are ON DELETE SET NULL, so the
+   * financial and audit records survive with nobody attached to them. That
+   * split is deliberate: erasure is a right, and keeping books is a separate
+   * legal obligation that anonymised rows satisfy without holding a person.
+   */
+  deleteAccount(userId: string): Promise<void>;
   usernameTaken(username: string): Promise<boolean>;
 
   /* Sessions */
@@ -153,6 +164,21 @@ export const memoryStore: Store = {
     db.byUsername.set(username.toLowerCase(), id);
 
     return publicAccount(record);
+  },
+
+  async deleteAccount(userId) {
+    const row = db.rows.get(userId);
+    if (!row) return;
+
+    db.rows.delete(userId);
+    db.byEmail.delete(row.account.email);
+    db.byUsername.delete(row.account.username.toLowerCase());
+
+    // Sessions are keyed by token hash, so the only way to find this user's is
+    // to walk them. Leaving one behind would keep a deleted account signed in.
+    for (const [tokenHash, session] of db.sessions) {
+      if (session.userId === userId) db.sessions.delete(tokenHash);
+    }
   },
 
   async getAccount(id) {
