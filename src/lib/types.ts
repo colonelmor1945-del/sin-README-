@@ -14,7 +14,13 @@ export type Provenance =
   /** Derived from other data by our own formulas. */
   | "estimated"
   /** Produced by the AI. Lowest confidence. Never shown without the label. */
-  | "ai-projection";
+  | "ai-projection"
+  /**
+   * Circulating with nothing reliable behind it, or simply not answered yet.
+   * Added for ADR-027 in the engine repo: both projects need to be able to say
+   * "nothing backs this", and saying nothing at all is not the same claim.
+   */
+  | "unverified";
 
 export type Tier = "free" | "pro" | "elite";
 
