@@ -214,6 +214,29 @@ export const postgresStore: Store = {
     return { ...toAccount(rows[0]), passwordHash: rows[0].password_hash ?? "" };
   },
 
+  async deleteAccount(userId) {
+    /*
+     * A real DELETE, not `deleted_at = now()`.
+     *
+     * The soft-delete column exists and every read already filters on it, so
+     * setting it would have been the smaller change. It is the wrong one for
+     * this: a soft-deleted row still holds the address, the username, the
+     * password hash, the saved plans and the AI conversations. That is not
+     * erasure, it is the same personal data with a flag next to it — and the
+     * UNIQUE constraint on email would also stop that person ever signing up
+     * again with their own address.
+     *
+     * `deleted_at` is the right mechanism for suspending an account, which is
+     * a different feature with a different actor. This one is the user asking
+     * to be gone.
+     *
+     * The schema does the rest. Everything personal cascades from users(id);
+     * payments, support_contributions and audit_log are ON DELETE SET NULL, so
+     * the books and the audit trail survive with nobody attached.
+     */
+    await pool().query("DELETE FROM users WHERE id = $1", [userId]);
+  },
+
   async emailTaken(email) {
     const { rowCount } = await pool().query(
       "SELECT 1 FROM users WHERE email = $1 AND deleted_at IS NULL",
