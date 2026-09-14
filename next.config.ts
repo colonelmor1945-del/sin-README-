@@ -13,11 +13,32 @@ const nextConfig: NextConfig = {
    */
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
 
+  /*
+   * Remote image hosts.
+   *
+   * next/image THROWS on an unlisted hostname rather than falling back, so a
+   * host we forgot takes down the whole page that renders it. /dashboard/feed
+   * was a 500 for exactly this reason: only `i.ytimg.com` was listed, but the
+   * YouTube Data API hands back thumbnails on the numbered shards
+   * (i1-i4.ytimg.com) depending on which one it picks for a video.
+   *
+   * So list the shards by wildcard, and list Reddit's hosts too — the feed
+   * renders those through the same component, and they would have been the
+   * next 500 the moment a Reddit post came back with a preview image.
+   */
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "picsum.photos" },
       { protocol: "https", hostname: "fastly.picsum.photos" },
+      // YouTube: i.ytimg.com plus the i1-i4 shards, and the legacy img host.
       { protocol: "https", hostname: "i.ytimg.com" },
+      { protocol: "https", hostname: "*.ytimg.com" },
+      { protocol: "https", hostname: "img.youtube.com" },
+      // Reddit: previews, direct uploads, and the thumbnail CDN.
+      { protocol: "https", hostname: "preview.redd.it" },
+      { protocol: "https", hostname: "external-preview.redd.it" },
+      { protocol: "https", hostname: "i.redd.it" },
+      { protocol: "https", hostname: "*.thumbs.redditmedia.com" },
     ],
   },
 };
