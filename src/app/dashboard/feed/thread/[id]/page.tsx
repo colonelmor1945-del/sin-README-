@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Empty, Panel, cx } from "@/components/ui/primitives";
 import { requireSession } from "@/lib/auth/session";
 import { fetchThread, timeAgo, type RedditComment } from "@/lib/social/reddit";
+import { sampleThread } from "@/lib/social/sample-thread";
 
 export const metadata = { title: "Thread" };
 
@@ -27,10 +28,14 @@ export default async function ThreadPage({
   const { sort } = await searchParams;
   const order = sort === "new" ? "new" : "top";
 
-  const { thread, unconfigured, failed, missing } = await fetchThread({
-    id,
-    sort: order,
-  });
+  // A way to look at this screen without credentials. Development only: in
+  // production "sample" is just an id Reddit has nothing under, and the page
+  // says so. See src/lib/social/sample-thread.ts.
+  const preview = id === "sample" && process.env.NODE_ENV !== "production";
+
+  const { thread, unconfigured, failed, missing } = preview
+    ? { thread: sampleThread(), unconfigured: false, failed: false, missing: false }
+    : await fetchThread({ id, sort: order });
 
   return (
     <div className="px-4 py-6 sm:px-8">
@@ -62,6 +67,14 @@ export default async function ThreadPage({
         </Panel>
       ) : (
         <article className="mt-5 max-w-[80ch]">
+          {preview ? (
+            <p className="mb-5 rounded-[10px] border border-projection/45 px-4 py-2.5 text-[12px] leading-relaxed text-projection">
+              Invented thread, shown so this screen can be looked at without
+              Reddit credentials. Nobody wrote any of it. Reachable only in
+              development.
+            </p>
+          ) : null}
+
           <header>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-faint">
               <span className="tabular">r/{thread.subreddit}</span>
