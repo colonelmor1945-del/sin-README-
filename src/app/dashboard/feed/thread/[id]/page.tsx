@@ -1,6 +1,7 @@
 import { ArrowFatUp, ArrowSquareOut, ChatCircle } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 
+import { ProvenanceTag } from "@/components/ProvenanceTag";
 import { Empty, Panel, cx } from "@/components/ui/primitives";
 import { requireSession } from "@/lib/auth/session";
 import { fetchThread, timeAgo, type RedditComment } from "@/lib/social/reddit";
@@ -87,6 +88,13 @@ export default async function ThreadPage({
                   {thread.flair}
                 </span>
               ) : null}
+              {/*
+                A thread is the weakest tier there is: players talking, with
+                nothing behind it until somebody checks. ADR-027 added the label
+                for exactly this, and the product rule does not exempt content
+                because somebody else wrote it.
+              */}
+              <ProvenanceTag value="unverified" size="xs" />
             </div>
 
             <h1 className="mt-2 text-xl font-semibold leading-snug tracking-tight text-ink">
@@ -185,9 +193,9 @@ export default async function ThreadPage({
           <p className="mt-8 border-t border-line pt-4 text-[11px] leading-relaxed text-ink-faint">
             Posts and comments belong to the people who wrote them and are shown
             here as they appear on Reddit, not stored by us. A deleted comment
-            can take up to five minutes to disappear from this page. Nothing on
-            this page is verified, and none of it feeds the mission or asset
-            databases.
+            can take up to five minutes to disappear from this page. Nothing
+            here feeds the mission or asset databases, and a figure quoted in a
+            thread stays unverified until a source is attached to it.
           </p>
         </article>
       )}
