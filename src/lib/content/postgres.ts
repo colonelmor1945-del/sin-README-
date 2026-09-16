@@ -295,3 +295,23 @@ export async function writeAsset(a: Asset): Promise<void> {
     client.release();
   }
 }
+
+/**
+ * Append to the audit trail.
+ *
+ * No ip_hash: the column exists for request-level events, and a content edit
+ * is already attributed to an account. Hashing the editor's address as well
+ * would be collecting more than the question needs answering.
+ */
+export async function writeAudit(
+  actorId: string | null,
+  action: string,
+  subject: string,
+  metadata: Record<string, unknown>,
+): Promise<void> {
+  await pool().query(
+    `INSERT INTO audit_log (actor_id, action, subject, metadata)
+     VALUES ($1, $2, $3, $4::jsonb)`,
+    [actorId, action, subject, JSON.stringify(metadata)],
+  );
+}

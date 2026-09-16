@@ -5,6 +5,9 @@ import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth/session";
 import { saveAsset, saveMission } from "@/lib/content/store";
+import { getAssets, getMissions } from "@/lib/content/store";
+import { parseTable, toCsv } from "@/lib/content/csv";
+import { recordAudit } from "@/lib/audit";
 import type { Asset, Mission } from "@/lib/types";
 
 /**
@@ -86,7 +89,7 @@ export async function updateMission(
   _prev: EditState,
   formData: FormData,
 ): Promise<EditState> {
-  await requireAdmin();
+  const { userId } = await requireAdmin();
 
   const parsed = MissionInput.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -119,6 +122,14 @@ export async function updateMission(
   const result = await saveMission(mission);
   if (!result.ok) return { error: result.error };
 
+  await recordAudit({
+    actorId: userId,
+    action: "content.mission.update",
+    subject: mission.id,
+    // The tier is the field worth being able to answer questions about later.
+    metadata: { provenance: mission.provenance, name: mission.name },
+  });
+
   revalidatePath("/dashboard/missions");
   revalidatePath("/admin/content");
   return { ok: true };
@@ -128,7 +139,7 @@ export async function updateAsset(
   _prev: EditState,
   formData: FormData,
 ): Promise<EditState> {
-  await requireAdmin();
+  const { userId } = await requireAdmin();
 
   const parsed = AssetInput.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -154,7 +165,203 @@ export async function updateAsset(
   const result = await saveAsset(asset);
   if (!result.ok) return { error: result.error };
 
+  await recordAudit({
+    actorId: userId,
+    action: "content.asset.update",
+    subject: asset.id,
+    metadata: { provenance: asset.provenance, name: asset.name },
+  });
+
   revalidatePath("/dashboard/economy");
   revalidatePath("/admin/content");
   return { ok: true };
+}
+
+/* Bulk ------------------------------------------------------------------- */
+
+/**
+ * Import and export, because launch week is not a form-at-a-time problem.
+ *
+ * The dataset has to be rebuilt from verified sources the week the game ships.
+ * The editor writes one record per submit, which makes the bottleneck the fact
+ * that one person types. A spreadsheet lets two people work at once and paste
+ * straight from a source; this is the way back in.
+ *
+ * Nothing here is a shortcut past the rules. Every row goes through the same
+ * schema and the same citation guard the form uses, and a row that fails is
+ * reported by line number with the reason rather than being skipped quietly.
+ */
+
+const MISSION_COLUMNS = [
+  "id", "name", "strand", "region", "payout", "duration", "difficulty",
+  "crewRequired", "bestStrategy", "provenance", "sourceUrl", "prerequisites", "tips",
+];
+
+const ASSET_COLUMNS = [
+  "id", "name", "category", "region", "price", "dailyNet", "upkeep",
+  "unlockLevel", "note", "provenance", "sourceUrl",
+];
+
+export async function exportMissionsCsv(): Promise<string> {
+  await requireAdmin();
+  const missions = await getMissions();
+  return toCsv(
+    MISSION_COLUMNS,
+    missions.map((m) => [
+      m.id, m.name, m.strand, m.region,
+      String(m.payout), String(m.duration), String(m.difficulty), String(m.crewRequired),
+      m.bestStrategy, m.provenance, "",
+      (m.prerequisites ?? []).join("\n"),
+      (m.tips ?? []).join("\n"),
+    ]),
+  );
+}
+
+export async function exportAssetsCsv(): Promise<string> {
+  await requireAdmin();
+  const assets = await getAssets();
+  return toCsv(
+    ASSET_COLUMNS,
+    assets.map((a) => [
+      a.id, a.name, a.category, a.region,
+      String(a.price), String(a.dailyNet), String(a.upkeep), String(a.unlockLevel),
+      a.note, a.provenance, "",
+    ]),
+  );
+}
+
+export interface ImportState {
+  ok?: boolean;
+  /** How many rows were written. */
+  saved?: number;
+  /** One line per rejected row, already naming its line number. */
+  problems?: string[];
+  error?: string;
+}
+
+/** Rows are 1-indexed and the header is line 1, so a row's line is index + 2. */
+const lineOf = (index: number) => index + 2;
+
+export async function importMissionsCsv(
+  _prev: ImportState,
+  formData: FormData,
+): Promise<ImportState> {
+  const { userId } = await requireAdmin();
+
+  const text = String(formData.get("csv") ?? "");
+  if (text.trim() === "") return { error: "Paste some CSV, or upload a file." };
+
+  const { rows, error } = parseTable(text, ["id", "name", "provenance"]);
+  if (error) return { error };
+
+  const problems: string[] = [];
+  let saved = 0;
+
+  for (const [index, row] of rows.entries()) {
+    const parsed = MissionInput.safeParse(row);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      problems.push(`Line ${lineOf(index)} (${row.id || "no id"}): ${String(issue.path[0])} — ${issue.message}`);
+      continue;
+    }
+
+    const citation = checkVerifiedCitation(parsed.data.provenance, row.sourceUrl ?? "");
+    if (citation) {
+      problems.push(`Line ${lineOf(index)} (${row.id}): ${citation}`);
+      continue;
+    }
+
+    const result = await saveMission({
+      ...parsed.data,
+      prerequisites: splitLines(row.prerequisites),
+      tips: splitLines(row.tips),
+      image: row.image ?? "",
+    });
+
+    if (!result.ok) {
+      problems.push(`Line ${lineOf(index)} (${row.id}): ${result.error}`);
+      continue;
+    }
+    saved++;
+  }
+
+  if (saved > 0) {
+    await recordAudit({
+      actorId: userId,
+      action: "content.mission.import",
+      subject: `${saved} missions`,
+      metadata: { saved, rejected: problems.length },
+    });
+    revalidatePath("/dashboard/missions");
+    revalidatePath("/admin/content");
+  }
+
+  return { ok: problems.length === 0, saved, problems };
+}
+
+export async function importAssetsCsv(
+  _prev: ImportState,
+  formData: FormData,
+): Promise<ImportState> {
+  const { userId } = await requireAdmin();
+
+  const text = String(formData.get("csv") ?? "");
+  if (text.trim() === "") return { error: "Paste some CSV, or upload a file." };
+
+  const { rows, error } = parseTable(text, ["id", "name", "provenance"]);
+  if (error) return { error };
+
+  const problems: string[] = [];
+  let saved = 0;
+
+  for (const [index, row] of rows.entries()) {
+    const parsed = AssetInput.safeParse(row);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      problems.push(`Line ${lineOf(index)} (${row.id || "no id"}): ${String(issue.path[0])} — ${issue.message}`);
+      continue;
+    }
+
+    const citation = checkVerifiedCitation(parsed.data.provenance, row.sourceUrl ?? "");
+    if (citation) {
+      problems.push(`Line ${lineOf(index)} (${row.id}): ${citation}`);
+      continue;
+    }
+
+    // Same as the form: trend, advice and history are derived on read, never
+    // stored, so a saved opinion cannot outlive the numbers behind it.
+    const result = await saveAsset({
+      ...parsed.data,
+      trend: "flat",
+      advice: "analyze",
+      history: [parsed.data.price, parsed.data.price],
+    });
+    if (!result.ok) {
+      problems.push(`Line ${lineOf(index)} (${row.id}): ${result.error}`);
+      continue;
+    }
+    saved++;
+  }
+
+  if (saved > 0) {
+    await recordAudit({
+      actorId: userId,
+      action: "content.asset.import",
+      subject: `${saved} assets`,
+      metadata: { saved, rejected: problems.length },
+    });
+    revalidatePath("/dashboard/economy");
+    revalidatePath("/admin/content");
+  }
+
+  return { ok: problems.length === 0, saved, problems };
+}
+
+/** Multi-line cells carry list fields, which is what a spreadsheet can express. */
+function splitLines(value: string | undefined): string[] {
+  return String(value ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 10);
 }

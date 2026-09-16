@@ -1,11 +1,19 @@
 import Link from "next/link";
 
 import { AssetEditor, MissionEditor } from "@/components/admin/ContentEditor";
+import { BulkContent } from "@/components/admin/BulkContent";
 import { Brand } from "@/components/Brand";
 import { Panel, Stat } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/auth/session";
 import { contentSource, getAssets, getMissions } from "@/lib/content/store";
-import { updateAsset, updateMission } from "@/app/admin/content/actions";
+import {
+  exportAssetsCsv,
+  exportMissionsCsv,
+  importAssetsCsv,
+  importMissionsCsv,
+  updateAsset,
+  updateMission,
+} from "@/app/admin/content/actions";
 
 export const metadata = { title: "Content" };
 
@@ -57,6 +65,23 @@ export default async function ContentPage() {
             writable={source.writable}
             reason={source.reason}
             action={updateAsset}
+          />
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <BulkContent
+            kind="missions"
+            writable={source.writable}
+            reason={source.reason}
+            importAction={importMissionsCsv}
+            exportAction={exportMissionsCsv}
+          />
+          <BulkContent
+            kind="assets"
+            writable={source.writable}
+            reason={source.reason}
+            importAction={importAssetsCsv}
+            exportAction={exportAssetsCsv}
           />
         </div>
 
