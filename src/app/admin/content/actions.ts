@@ -6,10 +6,11 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/session";
 import { saveAsset, saveMission } from "@/lib/content/store";
 import { getAssets, getMapPins, getMissions } from "@/lib/content/store";
-import { saveMapPin } from "@/lib/content/store";
+import { getNews, parseAffects, saveMapPin, saveNews } from "@/lib/content/store";
 import { parseTable, toCsv } from "@/lib/content/csv";
 import { recordAudit } from "@/lib/audit";
 import type { Asset, MapPin, Mission } from "@/lib/types";
+import type { NewsItem } from "@/lib/data/news";
 
 /**
  * Content edit actions.
@@ -442,6 +443,98 @@ export async function importMapPinsCsv(
       metadata: { saved, rejected: problems.length },
     });
     revalidatePath("/dashboard/map");
+    revalidatePath("/admin/content");
+  }
+
+  return { ok: problems.length === 0, saved, problems };
+}
+
+const NEWS_COLUMNS = [
+  "id", "title", "summary", "impact", "category", "source",
+  "sourceUrl", "provenance", "publishedAt", "affects",
+];
+
+const NewsInput = z.object({
+  // Blank means a new entry; the database generates the uuid.
+  id: z.string().uuid().optional().or(z.literal("").transform(() => undefined)),
+  title: z.string().min(4).max(200),
+  summary: z.string().min(10).max(1000),
+  // The editorial rule, enforced: an entry runs only if it says what it
+  // changes for the reader. An empty impact is the definition of filler.
+  impact: z.string().min(4).max(600),
+  category: z.enum(["official", "patch", "economy", "rumour", "community"]),
+  source: z.string().min(2).max(160),
+  sourceUrl: z.string().url().optional().or(z.literal("").transform(() => undefined)),
+  provenance: Provenance,
+  publishedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD."),
+});
+
+export async function exportNewsCsv(): Promise<string> {
+  await requireAdmin();
+  const news = await getNews();
+  return toCsv(
+    NEWS_COLUMNS,
+    news.map((n) => [
+      n.id, n.title, n.summary, n.impact, n.category, n.source,
+      n.sourceUrl ?? "", n.provenance, n.publishedAt,
+      // Types are not carried on the flattened read, so a round-trip cannot
+      // reconstruct them. Left blank rather than exported wrong.
+      "",
+    ]),
+  );
+}
+
+export async function importNewsCsv(
+  _prev: ImportState,
+  formData: FormData,
+): Promise<ImportState> {
+  const { userId } = await requireAdmin();
+
+  const text = String(formData.get("csv") ?? "");
+  if (text.trim() === "") return { error: "Paste some CSV, or upload a file." };
+
+  const { rows, error } = parseTable(text, ["title", "summary", "impact", "provenance"]);
+  if (error) return { error };
+
+  const problems: string[] = [];
+  let saved = 0;
+
+  for (const [index, row] of rows.entries()) {
+    const parsed = NewsInput.safeParse(row);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      problems.push(`Line ${lineOf(index)}: ${String(issue.path[0])} — ${issue.message}`);
+      continue;
+    }
+
+    const citation = checkVerifiedCitation(parsed.data.provenance, row.sourceUrl ?? "");
+    if (citation) {
+      problems.push(`Line ${lineOf(index)}: ${citation}`);
+      continue;
+    }
+
+    const item: NewsItem = {
+      ...parsed.data,
+      id: parsed.data.id ?? crypto.randomUUID(),
+      affects: [],
+    };
+
+    const result = await saveNews(item, parseAffects(row.affects ?? ""));
+    if (!result.ok) {
+      problems.push(`Line ${lineOf(index)}: ${result.error}`);
+      continue;
+    }
+    saved++;
+  }
+
+  if (saved > 0) {
+    await recordAudit({
+      actorId: userId,
+      action: "content.news.import",
+      subject: `${saved} news items`,
+      metadata: { saved, rejected: problems.length },
+    });
+    revalidatePath("/dashboard/news");
     revalidatePath("/admin/content");
   }
 

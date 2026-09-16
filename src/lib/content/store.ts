@@ -3,6 +3,7 @@ import "server-only";
 import { ASSETS } from "@/lib/data/assets";
 import { MISSIONS } from "@/lib/data/missions";
 import { MAP_PINS } from "@/lib/data/map";
+import { NEWS, type NewsItem } from "@/lib/data/news";
 import type { Asset, MapPin, Mission } from "@/lib/types";
 
 /**
@@ -90,6 +91,17 @@ export async function getAssets(): Promise<Asset[]> {
   );
 }
 
+export async function getNews(): Promise<NewsItem[]> {
+  return fromDatabase(
+    async () => {
+      const { readNews } = await import("@/lib/content/postgres");
+      return readNews();
+    },
+    NEWS,
+    "news",
+  );
+}
+
 export async function getMapPins(): Promise<MapPin[]> {
   return fromDatabase(
     async () => {
@@ -146,6 +158,43 @@ export async function saveMapPin(pin: MapPin): Promise<SaveResult> {
   try {
     const { writeMapPin } = await import("@/lib/content/postgres");
     await writeMapPin(pin);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+}
+
+/**
+ * `affects` arrives as "type:id" pairs so the join table's entity_type is
+ * preserved. An unrecognised prefix is dropped rather than guessed: a wrong
+ * cross-link points the economy tracker at the wrong record, which is worse
+ * than no link at all.
+ */
+const AFFECT_TYPES = new Set(["asset", "mission", "map_location"]);
+
+export function parseAffects(value: string): { type: string; id: string }[] {
+  return String(value ?? "")
+    .split(/[\n,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [type, ...rest] = entry.split(":");
+      return { type: type.trim(), id: rest.join(":").trim() };
+    })
+    .filter((link) => AFFECT_TYPES.has(link.type) && link.id !== "")
+    .slice(0, 20);
+}
+
+export async function saveNews(
+  item: NewsItem,
+  affects: { type: string; id: string }[],
+): Promise<SaveResult> {
+  const source = contentSource();
+  if (!source.writable) return { ok: false, error: source.reason };
+
+  try {
+    const { writeNews } = await import("@/lib/content/postgres");
+    await writeNews(item, affects);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: (error as Error).message };

@@ -23,7 +23,7 @@ export function BulkContent({
   importAction,
   exportAction,
 }: {
-  kind: "missions" | "assets" | "map locations";
+  kind: "missions" | "assets" | "map locations" | "news";
   writable: boolean;
   reason?: string;
   importAction: (state: ImportState, formData: FormData) => Promise<ImportState>;

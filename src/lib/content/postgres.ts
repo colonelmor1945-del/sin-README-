@@ -3,6 +3,7 @@ import "server-only";
 import { Pool } from "pg";
 
 import type { Asset, MapPin, Mission, PinKind, Provenance } from "@/lib/types";
+import type { NewsCategory, NewsItem } from "@/lib/data/news";
 
 /**
  * Content reads and writes against Postgres.
@@ -218,6 +219,51 @@ export async function readMapPins(): Promise<MapPin[]> {
   }));
 }
 
+/**
+ * Published intel entries, newest first.
+ *
+ * `affects` is a join table rather than a column, because an entry can point at
+ * an asset, a mission or a map location and the type matters — the economy
+ * tracker needs to answer "why did this number move" for its own records only.
+ * The NewsItem type flattens it to plain ids, which is all the feed renders.
+ */
+export async function readNews(): Promise<NewsItem[]> {
+  const { rows } = await pool().query<{
+    id: string;
+    title: string;
+    summary: string;
+    impact: string;
+    category: string;
+    source: string;
+    source_url: string | null;
+    provenance: string;
+    published_at: string;
+    affects: string[] | null;
+  }>(
+    `SELECT n.id, n.title, n.summary, n.impact, n.category, n.source,
+            n.source_url, n.provenance, n.published_at::text AS published_at,
+            array_agg(a.entity_id) FILTER (WHERE a.entity_id IS NOT NULL) AS affects
+       FROM news_items n
+       LEFT JOIN news_item_affects a ON a.news_id = n.id
+      WHERE n.published
+      GROUP BY n.id
+      ORDER BY n.published_at DESC`,
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    summary: r.summary,
+    impact: r.impact,
+    category: r.category as NewsCategory,
+    source: r.source,
+    sourceUrl: r.source_url ?? undefined,
+    provenance: PROV_FROM_SQL[r.provenance] ?? "estimated",
+    publishedAt: r.published_at,
+    affects: r.affects ?? [],
+  }));
+}
+
 /* Writes ----------------------------------------------------------------- */
 
 export async function writeMission(m: Mission): Promise<void> {
@@ -329,6 +375,64 @@ export async function writeMapPin(pin: MapPin): Promise<void> {
       PROV_TO_SQL[pin.provenance],
     ],
   );
+}
+
+/**
+ * Upsert an intel entry and replace its cross-links.
+ *
+ * `affects` arrives as "type:id" pairs, because the join table constrains the
+ * type and a flat id cannot say whether "nightclub" is an asset or a mission.
+ * Anything without a recognised prefix is dropped rather than guessed at — a
+ * wrong cross-link points the economy tracker at the wrong record.
+ *
+ * Both statements run in one transaction. Replacing the links outside one
+ * would leave an entry with no cross-links at all if the second failed, which
+ * reads as "this changed nothing" rather than as an error.
+ */
+export async function writeNews(
+  item: NewsItem,
+  affects: { type: string; id: string }[],
+): Promise<void> {
+  const client = await pool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO news_items
+         (id, title, summary, impact, category, source, source_url, provenance, published_at, published)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+       ON CONFLICT (id) DO UPDATE SET
+         title = EXCLUDED.title,
+         summary = EXCLUDED.summary,
+         impact = EXCLUDED.impact,
+         category = EXCLUDED.category,
+         source = EXCLUDED.source,
+         source_url = EXCLUDED.source_url,
+         provenance = EXCLUDED.provenance,
+         published_at = EXCLUDED.published_at,
+         updated_at = now()`,
+      [
+        item.id, item.title, item.summary, item.impact, item.category,
+        item.source, item.sourceUrl ?? null,
+        PROV_TO_SQL[item.provenance], item.publishedAt,
+      ],
+    );
+
+    await client.query("DELETE FROM news_item_affects WHERE news_id = $1", [item.id]);
+    for (const link of affects) {
+      await client.query(
+        `INSERT INTO news_item_affects (news_id, entity_type, entity_id)
+         VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+        [item.id, link.type, link.id],
+      );
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function writeAudit(
