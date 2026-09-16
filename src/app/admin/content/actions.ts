@@ -5,10 +5,11 @@ import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth/session";
 import { saveAsset, saveMission } from "@/lib/content/store";
-import { getAssets, getMissions } from "@/lib/content/store";
+import { getAssets, getMapPins, getMissions } from "@/lib/content/store";
+import { saveMapPin } from "@/lib/content/store";
 import { parseTable, toCsv } from "@/lib/content/csv";
 import { recordAudit } from "@/lib/audit";
-import type { Asset, Mission } from "@/lib/types";
+import type { Asset, MapPin, Mission } from "@/lib/types";
 
 /**
  * Content edit actions.
@@ -52,6 +53,19 @@ const MissionInput = z.object({
   difficulty: z.coerce.number().int().min(1).max(5),
   crewRequired: z.coerce.number().int().min(1).max(8),
   bestStrategy: z.string().max(120),
+  provenance: Provenance,
+});
+
+const MapPinInput = z.object({
+  id: z.string().min(1).max(64).regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers and hyphens."),
+  name: z.string().min(2).max(120),
+  kind: z.enum(["mission", "business", "property", "money-spot", "vehicle", "activity"]),
+  region: z.string().min(2).max(60),
+  // Viewport percentages, not coordinates. The database checks this too.
+  x: z.coerce.number().min(0).max(100),
+  y: z.coerce.number().min(0).max(100),
+  detail: z.string().max(400),
+  value: z.coerce.number().int().min(0).max(1_000_000_000),
   provenance: Provenance,
 });
 
@@ -364,4 +378,72 @@ function splitLines(value: string | undefined): string[] {
     .map((line) => line.trim())
     .filter(Boolean)
     .slice(0, 10);
+}
+
+const MAP_COLUMNS = [
+  "id", "name", "kind", "region", "x", "y", "detail", "value", "provenance", "sourceUrl",
+];
+
+export async function exportMapPinsCsv(): Promise<string> {
+  await requireAdmin();
+  const pins = await getMapPins();
+  return toCsv(
+    MAP_COLUMNS,
+    pins.map((p) => [
+      p.id, p.name, p.kind, p.region,
+      String(p.x), String(p.y), p.detail, String(p.value),
+      p.provenance, "",
+    ]),
+  );
+}
+
+export async function importMapPinsCsv(
+  _prev: ImportState,
+  formData: FormData,
+): Promise<ImportState> {
+  const { userId } = await requireAdmin();
+
+  const text = String(formData.get("csv") ?? "");
+  if (text.trim() === "") return { error: "Paste some CSV, or upload a file." };
+
+  const { rows, error } = parseTable(text, ["id", "name", "provenance"]);
+  if (error) return { error };
+
+  const problems: string[] = [];
+  let saved = 0;
+
+  for (const [index, row] of rows.entries()) {
+    const parsed = MapPinInput.safeParse(row);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      problems.push(`Line ${lineOf(index)} (${row.id || "no id"}): ${String(issue.path[0])} — ${issue.message}`);
+      continue;
+    }
+
+    const citation = checkVerifiedCitation(parsed.data.provenance, row.sourceUrl ?? "");
+    if (citation) {
+      problems.push(`Line ${lineOf(index)} (${row.id}): ${citation}`);
+      continue;
+    }
+
+    const result = await saveMapPin(parsed.data as MapPin);
+    if (!result.ok) {
+      problems.push(`Line ${lineOf(index)} (${row.id}): ${result.error}`);
+      continue;
+    }
+    saved++;
+  }
+
+  if (saved > 0) {
+    await recordAudit({
+      actorId: userId,
+      action: "content.map.import",
+      subject: `${saved} map locations`,
+      metadata: { saved, rejected: problems.length },
+    });
+    revalidatePath("/dashboard/map");
+    revalidatePath("/admin/content");
+  }
+
+  return { ok: problems.length === 0, saved, problems };
 }

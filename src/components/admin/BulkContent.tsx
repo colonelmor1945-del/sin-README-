@@ -23,7 +23,7 @@ export function BulkContent({
   importAction,
   exportAction,
 }: {
-  kind: "missions" | "assets";
+  kind: "missions" | "assets" | "map locations";
   writable: boolean;
   reason?: string;
   importAction: (state: ImportState, formData: FormData) => Promise<ImportState>;
@@ -40,7 +40,7 @@ export function BulkContent({
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${kind}-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `${kind.replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}.csv`;
       link.click();
       URL.revokeObjectURL(url);
     } finally {
