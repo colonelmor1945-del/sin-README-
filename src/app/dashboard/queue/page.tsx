@@ -1,6 +1,7 @@
 import { ArrowSquareOut, ArrowFatUp, Warning } from "@phosphor-icons/react/dist/ssr";
 
 import { PageHeader } from "@/components/app/PageHeader";
+import { DraftFromClaim } from "@/components/admin/DraftFromClaim";
 import { ProvenanceTag } from "@/components/ProvenanceTag";
 import { Panel, PanelHead, Stat, cx } from "@/components/ui/primitives";
 import { requireAdmin } from "@/lib/auth/session";
@@ -134,7 +135,13 @@ export default async function QueuePage() {
                       </div>
                     </div>
 
-                    <div className="hidden shrink-0 sm:block">
+                    <div className="hidden shrink-0 items-center gap-2 sm:flex">
+                      <DraftFromClaim
+                        title={item.title}
+                        url={item.url}
+                        provenance={item.provenance}
+                        claimKey={item.claimKey}
+                      />
                       <ProvenanceTag value={item.provenance} size="xs" />
                     </div>
                   </li>

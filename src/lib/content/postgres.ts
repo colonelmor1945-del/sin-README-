@@ -303,6 +303,34 @@ export async function writeAsset(a: Asset): Promise<void> {
  * is already attributed to an account. Hashing the editor's address as well
  * would be collecting more than the question needs answering.
  */
+/**
+ * Upsert a map pin.
+ *
+ * x and y are viewport percentages, not coordinates, and the database checks
+ * the 0-100 range. Keeping that constraint in SQL rather than only in the form
+ * is what stops an import putting a pin off the edge of the map.
+ */
+export async function writeMapPin(pin: MapPin): Promise<void> {
+  await pool().query(
+    `INSERT INTO map_locations (id, name, kind, region, x, y, detail, value, provenance)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     ON CONFLICT (id) DO UPDATE SET
+       name = EXCLUDED.name,
+       kind = EXCLUDED.kind,
+       region = EXCLUDED.region,
+       x = EXCLUDED.x,
+       y = EXCLUDED.y,
+       detail = EXCLUDED.detail,
+       value = EXCLUDED.value,
+       provenance = EXCLUDED.provenance`,
+    [
+      pin.id, pin.name, pin.kind, pin.region,
+      pin.x, pin.y, pin.detail, pin.value,
+      PROV_TO_SQL[pin.provenance],
+    ],
+  );
+}
+
 export async function writeAudit(
   actorId: string | null,
   action: string,

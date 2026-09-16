@@ -19,6 +19,7 @@ export type AuditAction =
   | "content.asset.update"
   | "content.mission.import"
   | "content.asset.import"
+  | "content.map.import"
   | "account.delete";
 
 export async function recordAudit({

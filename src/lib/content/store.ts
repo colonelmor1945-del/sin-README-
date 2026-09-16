@@ -138,3 +138,16 @@ export async function saveAsset(asset: Asset): Promise<SaveResult> {
     return { ok: false, error: (error as Error).message };
   }
 }
+
+export async function saveMapPin(pin: MapPin): Promise<SaveResult> {
+  const source = contentSource();
+  if (!source.writable) return { ok: false, error: source.reason };
+
+  try {
+    const { writeMapPin } = await import("@/lib/content/postgres");
+    await writeMapPin(pin);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+}

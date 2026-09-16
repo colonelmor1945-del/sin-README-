@@ -8,8 +8,10 @@ import { requireAdmin } from "@/lib/auth/session";
 import { contentSource, getAssets, getMissions } from "@/lib/content/store";
 import {
   exportAssetsCsv,
+  exportMapPinsCsv,
   exportMissionsCsv,
   importAssetsCsv,
+  importMapPinsCsv,
   importMissionsCsv,
   updateAsset,
   updateMission,
@@ -82,6 +84,13 @@ export default async function ContentPage() {
             reason={source.reason}
             importAction={importAssetsCsv}
             exportAction={exportAssetsCsv}
+          />
+          <BulkContent
+            kind="map locations"
+            writable={source.writable}
+            reason={source.reason}
+            importAction={importMapPinsCsv}
+            exportAction={exportMapPinsCsv}
           />
         </div>
 
