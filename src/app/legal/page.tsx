@@ -1,5 +1,5 @@
 import { SiteFooter, SiteNav } from "@/components/landing/Chrome";
-import { PROVENANCE_META } from "@/lib/provenance";
+import { PROVENANCE_META, PROVENANCE_ORDER } from "@/lib/provenance";
 import type { Provenance } from "@/lib/types";
 
 export const metadata = {
@@ -8,7 +8,6 @@ export const metadata = {
     "What GTA 6 Money Lab is, what its data means, and its relationship to Rockstar Games and Take-Two Interactive.",
 };
 
-const ORDER: Provenance[] = ["verified", "community", "estimated", "ai-projection"];
 
 export default function LegalPage() {
   return (
@@ -51,7 +50,7 @@ export default function LegalPage() {
               </p>
 
               <dl className="mt-6 space-y-4">
-                {ORDER.map((p) => (
+                {PROVENANCE_ORDER.map((p) => (
                   <div key={p} className="border-l-2 border-line pl-4">
                     <dt className="text-[13px] font-medium text-ink">
                       {PROVENANCE_META[p].label}

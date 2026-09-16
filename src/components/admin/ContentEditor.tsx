@@ -6,7 +6,7 @@ import { useFormStatus } from "react-dom";
 import { ProvenanceTag } from "@/components/ProvenanceTag";
 import { Button, Panel, PanelHead, cx } from "@/components/ui/primitives";
 import type { EditState } from "@/app/admin/content/actions";
-import { PROVENANCE_META } from "@/lib/provenance";
+import { PROVENANCE_META, PROVENANCE_ORDER } from "@/lib/provenance";
 import type { Asset, Mission, Provenance } from "@/lib/types";
 
 /**
@@ -22,7 +22,6 @@ import type { Asset, Mission, Provenance } from "@/lib/types";
  * server refuses it without a citation.
  */
 
-const PROVENANCES: Provenance[] = ["verified", "community", "estimated", "ai-projection"];
 
 export function MissionEditor({
   missions,
@@ -312,7 +311,7 @@ function ProvenanceField({
     <div className="flex flex-col gap-2">
       <label className="text-[13px] font-medium text-ink">Provenance</label>
       <div className="flex flex-wrap gap-1.5">
-        {PROVENANCES.map((p) => (
+        {PROVENANCE_ORDER.map((p) => (
           <label
             key={p}
             className={cx(
