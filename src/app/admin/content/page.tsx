@@ -9,9 +9,11 @@ import { contentSource, getAssets, getMissions } from "@/lib/content/store";
 import {
   exportAssetsCsv,
   exportMapPinsCsv,
+  exportNewsCsv,
   exportMissionsCsv,
   importAssetsCsv,
   importMapPinsCsv,
+  importNewsCsv,
   importMissionsCsv,
   updateAsset,
   updateMission,
@@ -91,6 +93,13 @@ export default async function ContentPage() {
             reason={source.reason}
             importAction={importMapPinsCsv}
             exportAction={exportMapPinsCsv}
+          />
+          <BulkContent
+            kind="news"
+            writable={source.writable}
+            reason={source.reason}
+            importAction={importNewsCsv}
+            exportAction={exportNewsCsv}
           />
         </div>
 
