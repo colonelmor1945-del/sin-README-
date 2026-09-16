@@ -16,7 +16,7 @@ import {
 } from "@/components/landing/slideContent";
 import { StructuredData } from "@/components/StructuredData";
 import { ButtonLink, Panel } from "@/components/ui/primitives";
-import { PROVENANCE_META } from "@/lib/provenance";
+import { PROVENANCE_META, PROVENANCE_ORDER } from "@/lib/provenance";
 import { TIERS } from "@/lib/entitlements";
 import { effectiveHourly, moneyPerHour, paybackDays, sortMissions } from "@/lib/calc";
 import { ASSETS } from "@/lib/data/assets";
@@ -201,7 +201,6 @@ function Countdown() {
 /* 3. Data honesty, full-width band --------------------------------------- */
 
 function DataHonesty() {
-  const order: Provenance[] = ["verified", "community", "estimated", "ai-projection"];
 
   return (
     <section className="border-b border-line bg-surface">
@@ -219,7 +218,7 @@ function DataHonesty() {
         </div>
 
         <div className="mt-12 grid gap-px overflow-hidden rounded-[14px] border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
-          {order.map((p, i) => (
+          {PROVENANCE_ORDER.map((p, i) => (
             <Reveal key={p} delay={i * 0.06}>
               <div className="h-full bg-surface-2 p-5">
                 <ProvenanceTag value={p} />

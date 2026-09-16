@@ -44,6 +44,23 @@ export const PROVENANCE_META: Record<
   },
 };
 
+/**
+ * Every tier, strongest first, for anywhere that lists them all.
+ *
+ * Four separate files used to hold their own copy of this array, and when
+ * ADR-027 added a fifth tier all four kept showing four — including the legal
+ * page and the landing page, which is to say the product was publishing an
+ * incomplete account of its own confidence system. Deriving the list here
+ * means adding a tier is one edit again.
+ */
+export const PROVENANCE_ORDER: Provenance[] = [
+  "verified",
+  "community",
+  "estimated",
+  "ai-projection",
+  "unverified",
+];
+
 /** Ordered worst to best, so a set of records can be summarised by its weakest link. */
 // Worst to best. `unverified` sits below `ai-projection`: a projection is at
 // least the output of something, and this is the absence of one.

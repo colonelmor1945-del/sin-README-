@@ -26,7 +26,18 @@ export interface EditState {
   field?: string;
 }
 
-const Provenance = z.enum(["verified", "community", "estimated", "ai-projection"]);
+// Kept in step with the Provenance union in src/lib/types.ts by hand, because
+// z.enum needs a literal tuple. ADR-027 added "unverified" to that union and
+// to the database enum, and this list was missed: a row stored at that tier
+// could not be edited here, since its own value failed validation on the way
+// back in.
+const Provenance = z.enum([
+  "verified",
+  "community",
+  "estimated",
+  "ai-projection",
+  "unverified",
+]);
 
 const MissionInput = z.object({
   id: z.string().min(1).max(64).regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers and hyphens."),
