@@ -100,7 +100,7 @@ async function pollReddit(source: Source): Promise<{ items: IngestItem[]; run: S
         ok: false,
         found: 0,
         ms: Date.now() - t0,
-        error: feed.unconfigured ? "No Reddit credentials configured" : "Reddit refused the request",
+        error: feed.unconfigured ? "No Reddit credentials configured" : "Reddit refused the request (rate limited or down)",
       },
     };
   }
@@ -116,7 +116,7 @@ async function pollReddit(source: Source): Promise<{ items: IngestItem[]; run: S
     provenance: capProvenance("community", source),
     claimKey: claimKey(post.title),
     corroboration: 1,
-    score: post.score,
+    score: post.score ?? undefined,
   }));
 
   return { items, run: { sourceId: source.id, ok: true, found: items.length, ms: Date.now() - t0 } };
@@ -126,7 +126,9 @@ async function pollYouTube(source: Source): Promise<{ items: IngestItem[]; run: 
   const t0 = Date.now();
   const page = await fetchShorts({});
 
-  if (page.unconfigured) {
+  // The curated list is a fixed set of old official videos, not news. Feeding
+  // it in would stamp them with today's date.
+  if (page.unconfigured || page.source === "curated") {
     return {
       items: [],
       run: {
@@ -134,7 +136,7 @@ async function pollYouTube(source: Source): Promise<{ items: IngestItem[]; run: 
         ok: false,
         found: 0,
         ms: Date.now() - t0,
-        error: "No YouTube API key configured",
+        error: "No YouTube API key configured, and the keyless channel feed is down",
       },
     };
   }

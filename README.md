@@ -81,8 +81,9 @@ server, delete `.next`, start again.
 The file is safe to run more than once.
 
 **Most of this app degrades on purpose rather than failing.** No AI key runs
-the deterministic planner, no YouTube key falls back to the Rockstar channel
-feed, no Discord invite hides the widget. Each is a decision, not a fault,
+the deterministic planner, no YouTube key falls back to official trailers,
+no Reddit app falls back to the public RSS feed, no Discord invite hides the
+panel. Each is a decision, not a fault,
 which means a half-configured checkout looks exactly like a working one until
 you try the one thing that is missing. `npm run preflight` prints what is off
 and what that costs.

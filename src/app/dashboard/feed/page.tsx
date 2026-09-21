@@ -43,20 +43,18 @@ export default async function FeedPage() {
           <Panel>
             <PanelHead
               title="Reddit"
-              meta={<span className="text-[11px] text-ink-faint">r/GTA6, hot</span>}
+              meta={
+                <span className="text-[11px] text-ink-faint">
+                  r/GTA6, hot{reddit.source === "rss" ? " · public feed" : ""}
+                </span>
+              }
             />
-            {reddit.unconfigured ? (
-              <p className="px-5 py-10 text-center text-[13px] leading-relaxed text-ink-muted">
-                Reddit closed public access to its listings, so this needs an
-                app. Register one at reddit.com/prefs/apps as type script and
-                set <span className="tabular text-ink">REDDIT_CLIENT_ID</span>{" "}
-                and <span className="tabular text-ink">REDDIT_CLIENT_SECRET</span>.
-                It is free.
-              </p>
-            ) : reddit.posts.length === 0 ? (
+            {reddit.posts.length === 0 ? (
               <p className="px-5 py-10 text-center text-[13px] text-ink-muted">
-                Reddit did not answer. It rate limits hard, so this usually
-                clears on its own.
+                Reddit did not answer. It rate limits anonymous readers hard,
+                so this usually clears within a minute. Setting
+                REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET gives a far larger
+                allowance.
               </p>
             ) : (
               <ul className="divide-y divide-line/70">
@@ -72,14 +70,20 @@ export default async function FeedPage() {
                         {post.title}
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-faint">
-                        <span className="tabular inline-flex items-center gap-1">
-                          <ArrowFatUp size={12} />
-                          {post.score}
-                        </span>
-                        <span className="tabular inline-flex items-center gap-1">
-                          <ChatCircle size={12} />
-                          {post.comments}
-                        </span>
+                        {/* The keyless feed does not report these. Blank, not zero. */}
+                        {post.score !== null ? (
+                          <span className="tabular inline-flex items-center gap-1">
+                            <ArrowFatUp size={12} />
+                            {post.score}
+                          </span>
+                        ) : null}
+                        {post.comments !== null ? (
+                          <span className="tabular inline-flex items-center gap-1">
+                            <ChatCircle size={12} />
+                            {post.comments}
+                          </span>
+                        ) : null}
+                        {post.score === null ? <span>u/{post.author}</span> : null}
                         <span>{timeAgo(post.createdAt)}</span>
                         {post.flair ? (
                           <span className="rounded-full border border-line-strong px-1.5 text-[9px]">

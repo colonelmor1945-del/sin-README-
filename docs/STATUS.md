@@ -141,8 +141,19 @@ Recording these so nobody spends a day rediscovering them.
 
 - **Reddit's public `.json` listings return 403** to server-side requests since
   the 2023 API changes. They still work from a browser, so this looks fine in
-  local testing and returns nothing in production. Use the OAuth API, as
-  `src/lib/social/reddit.ts` now does.
+  local testing and returns nothing in production. The `.rss` feed of the
+  same listing does answer (checked 21 September 2026), with a tiny anonymous
+  budget: about one request a minute per IP. `src/lib/social/reddit.ts` uses
+  the OAuth API when credentials exist and the RSS feed, cached and with the
+  last good answer kept, when they do not.
+- **YouTube channel RSS (`/feeds/videos.xml`) has returned 404 for every
+  channel since February 2026**, YouTube's own included. A platform-wide
+  outage, not a block on us. oEmbed still answers, so the keyless fallback is
+  now a short list of official Rockstar trailers verified through it. The real
+  fix is a free `YOUTUBE_API_KEY`.
+- **Discord needs no bot and no widget for a member count.** The public invite
+  endpoint returns approximate member and online counts for any valid invite,
+  so `NEXT_PUBLIC_DISCORD_INVITE` alone is enough.
 - **There is no public API to browse TikTok or Instagram by topic.** TikTok's
   Display API and Instagram's oEmbed only reach content you own or a specific
   post you already have the URL for. An endless topic feed can only come from

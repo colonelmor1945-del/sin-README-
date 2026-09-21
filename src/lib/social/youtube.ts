@@ -26,6 +26,19 @@ import "server-only";
  * that is the single most relevant source there is and it means the feed shows
  * real video on a fresh checkout instead of an empty panel. The page says
  * which of the two it is looking at rather than passing one off as the other.
+ *
+ * THAT FEED IS DOWN FOR EVERYONE
+ * Since February 2026 /feeds/videos.xml answers 404 for every channel,
+ * YouTube's own included, with or without a browser user agent (checked again
+ * 21 September 2026; reported by FreshRSS, RSS-Bridge, n8n and others). It is
+ * still tried, since it may come back, but it can no longer be the thing a
+ * fresh checkout relies on.
+ *
+ * So there is a third step: a fixed list of official Rockstar uploads, each
+ * confirmed through YouTube's oEmbed endpoint, which is keyless and still
+ * answers. Titles and thumbnails come from oEmbed, not from this file, and a
+ * video that stops answering drops out. The panel labels it as a curated list,
+ * not a feed. A YOUTUBE_API_KEY (free, 10,000 units a day) is the real fix.
  */
 
 import type { Short, ShortsPage } from "@/lib/social/types";
@@ -57,7 +70,7 @@ export async function fetchShorts({
 
   // No key: fall back to the official channel feed rather than an empty panel.
   // Still no invented content, just a narrower and honestly labelled source.
-  if (!key) return fetchChannelFeed();
+  if (!key) return fetchChannelFeed().then(orCurated);
 
   const url = new URL(SEARCH);
   url.searchParams.set("key", key);
@@ -83,7 +96,11 @@ export async function fetchShorts({
     console.warn("[youtube] search failed", response.status);
     // Quota is the common case here and it comes back tomorrow. The channel
     // feed is not rate limited, so it keeps the page alive in the meantime.
-    return fetchChannelFeed();
+    // Mid-scroll, the fallback would re-append the same videos. End the list.
+    if (pageToken) {
+      return { items: [], nextPageToken: null, unconfigured: false, source: "api" };
+    }
+    return fetchChannelFeed().then(orCurated);
   }
 
   const body = (await response.json()) as {
@@ -172,6 +189,56 @@ async function fetchChannelFeed(): Promise<ShortsPage> {
 
   // The feed is a fixed window of recent uploads, so there is no next page.
   return { items, nextPageToken: null, unconfigured: items.length === 0, source: "feed" };
+}
+
+/**
+ * Official Rockstar uploads, by id only.
+ *
+ * Nothing else about them is typed here: the title, channel and thumbnail are
+ * read from oEmbed at fetch time, so this list cannot misdescribe a video, and
+ * one that is removed or made private simply stops appearing.
+ */
+export const CURATED_OFFICIAL = ["VQRLujxTm3c", "QdBZY2fkU-0"] as const;
+const OEMBED = "https://www.youtube.com/oembed";
+
+async function orCurated(page: ShortsPage): Promise<ShortsPage> {
+  return page.items.length > 0 ? page : fetchCurated();
+}
+
+export async function fetchCurated(): Promise<ShortsPage> {
+  const found = await Promise.all(
+    CURATED_OFFICIAL.map(async (id): Promise<Short | null> => {
+      const url = new URL(OEMBED);
+      url.searchParams.set("url", `https://www.youtube.com/watch?v=${id}`);
+      url.searchParams.set("format", "json");
+      try {
+        // A day: these are fixed videos, the check is only "does it still exist".
+        const response = await fetch(url, { next: { revalidate: 86_400 } });
+        if (!response.ok) return null;
+        const body = (await response.json()) as {
+          title?: string;
+          author_name?: string;
+          thumbnail_url?: string;
+        };
+        // Refuse anything oEmbed does not attribute to Rockstar. The list is
+        // "official uploads", and that is checked, not assumed.
+        if (!body.title || body.author_name !== "Rockstar Games") return null;
+        return {
+          id,
+          title: body.title,
+          channel: body.author_name,
+          publishedAt: "",
+          thumbnail: body.thumbnail_url ?? "",
+          embedUrl: `https://www.youtube-nocookie.com/embed/${id}?rel=0&modestbranding=1`,
+          watchUrl: `https://www.youtube.com/watch?v=${id}`,
+        };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const items = found.filter((s): s is Short => s !== null);
+  return { items, nextPageToken: null, unconfigured: items.length === 0, source: "curated" };
 }
 
 /**

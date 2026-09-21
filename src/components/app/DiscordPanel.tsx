@@ -51,10 +51,16 @@ export function DiscordPanel({
 
             {widget.unconfigured ? (
               <p className="mt-1.5 text-[12px] leading-relaxed text-ink-muted">
-                Set <span className="tabular text-ink">DISCORD_GUILD_ID</span>{" "}
-                and{" "}
+                Set{" "}
                 <span className="tabular text-ink">NEXT_PUBLIC_DISCORD_INVITE</span>{" "}
-                to switch this on.
+                to a permanent invite link and the live counts appear here. No
+                bot or token needed.
+              </p>
+            ) : widget.inviteInvalid ? (
+              <p className="mt-1.5 text-[12px] leading-relaxed text-ink-muted">
+                The configured invite has expired or never existed. Create one
+                set to never expire and update{" "}
+                <span className="tabular text-ink">NEXT_PUBLIC_DISCORD_INVITE</span>.
               </p>
             ) : widget.widgetDisabled ? (
               <p className="mt-1.5 text-[12px] leading-relaxed text-ink-muted">
@@ -84,6 +90,13 @@ export function DiscordPanel({
           </ButtonLink>
         ) : null}
 
+        {widget.memberCount !== null ? (
+          <p className="mt-3 text-center text-[11px] text-ink-faint">
+            <span className="tabular">{widget.memberCount.toLocaleString("en-US")}</span>{" "}
+            members, approximate
+          </p>
+        ) : null}
+
         {widget.channelCount > 0 ? (
           <p className={cx("mt-3 text-center text-[11px] text-ink-faint")}>
             <span className="tabular">{widget.channelCount}</span> public
@@ -92,8 +105,8 @@ export function DiscordPanel({
         ) : null}
 
         <p className="mt-4 border-t border-line pt-3 text-[11px] leading-relaxed text-ink-faint">
-          We show how many people are online, never who. The widget returns a
-          member list and this page drops it.
+          We show how many people are online, never who. Discord sends names
+          along with the counts and this page drops them.
         </p>
       </div>
     </Panel>

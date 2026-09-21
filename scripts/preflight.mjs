@@ -49,13 +49,13 @@ const REQUIRED = [
  */
 const OPTIONAL = [
   ["ANTHROPIC_API_KEY", "The assistant and plan generator run the deterministic heuristic planner instead of Claude."],
-  ["YOUTUBE_API_KEY", "The video feed falls back to the official Rockstar channel feed instead of searching all of YouTube."],
+  ["YOUTUBE_API_KEY", "The video feed shows only official trailers (the keyless channel feed is down since Feb 2026) instead of searching all of YouTube."],
   ["GOOGLE_CLIENT_ID", "No “Continue with Google” on the sign-in screens."],
   ["GOOGLE_CLIENT_SECRET", "Same as above. Both halves are needed."],
-  ["REDDIT_CLIENT_ID", "The Reddit panel in the community feed stays empty."],
+  ["REDDIT_CLIENT_ID", "The Reddit panel uses the public RSS feed: no scores or comment counts, and a very small rate limit."],
   ["REDDIT_CLIENT_SECRET", "Same as above."],
-  ["NEXT_PUBLIC_DISCORD_INVITE", "No Discord widget in the footer."],
-  ["DISCORD_GUILD_ID", "No live Discord member count."],
+  ["NEXT_PUBLIC_DISCORD_INVITE", "No Discord panel and no live member or online counts."],
+  ["DISCORD_GUILD_ID", "Nothing, if the invite above is set. Only a fallback for when it is not."],
   ["NEXT_PUBLIC_SPOTIFY_PLAYLIST_ID", "No Spotify playlist embed."],
   ["CRON_SECRET", "Scheduled ingestion refuses to run. The endpoint stays closed rather than defaulting to open, which is the right failure but it does mean no automatic updates."],
 ];
