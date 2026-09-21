@@ -108,11 +108,16 @@ describe("schema.sql", () => {
         WHERE t.typname = 'provenance' ORDER BY e.enumsortorder`,
     );
 
+    // 'unverified' is appended rather than inserted: ALTER TYPE ADD VALUE with
+    // no BEFORE/AFTER puts it last, and enumsortorder is sort order, not
+    // confidence order. Confidence order lives in RANK in lib/provenance.ts,
+    // where 'unverified' is the weakest. (ADR-027.)
     expect(rows.map((r) => r.enumlabel)).toEqual([
       "verified",
       "community",
       "estimated",
       "ai_projection",
+      "unverified",
     ]);
   });
 

@@ -13,6 +13,10 @@ const TONE: Record<Provenance, string> = {
   community: "border-line-strong text-ink-muted",
   estimated: "border-line-strong text-ink-faint",
   "ai-projection": "border-projection/45 text-projection",
+  // Faintest of the five on purpose. This label means nothing is behind the
+  // number, so it should not draw the eye the way a projection does — a
+  // projection is at least the output of something.
+  unverified: "border-line text-ink-faint",
 };
 
 export function ProvenanceTag({

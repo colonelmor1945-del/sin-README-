@@ -36,8 +36,12 @@ DO $$ BEGIN
   CREATE TYPE subscription_state AS ENUM ('none', 'trialing', 'active', 'past_due', 'canceled');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE TYPE provenance AS ENUM ('verified', 'community', 'estimated', 'ai_projection');
+  CREATE TYPE provenance AS ENUM ('verified', 'community', 'estimated', 'ai_projection', 'unverified');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- CREATE TYPE above only shapes a fresh database. A database created before
+-- 'unverified' existed keeps the old four, so add it explicitly. Additive:
+-- no rows move, no value changes meaning. (ADR-027 in the engine repo.)
+ALTER TYPE provenance ADD VALUE IF NOT EXISTS 'unverified';
 DO $$ BEGIN
   CREATE TYPE asset_kind AS ENUM ('business', 'property', 'vehicle', 'service');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;

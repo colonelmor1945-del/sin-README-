@@ -97,7 +97,7 @@ export const canAutoIngest = (source: Source) => source.intervalMinutes > 0;
 export const POLLABLE = SOURCES.filter(canAutoIngest);
 
 /** Ranked worst to best, so a ceiling can be applied by comparison. */
-const RANK: Provenance[] = ["ai-projection", "estimated", "community", "verified"];
+const RANK: Provenance[] = ["unverified", "ai-projection", "estimated", "community", "verified"];
 
 /**
  * Applies a source's ceiling to a proposed provenance.

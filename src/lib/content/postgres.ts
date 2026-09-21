@@ -43,6 +43,7 @@ const PROV_TO_SQL: Record<Provenance, string> = {
   community: "community",
   estimated: "estimated",
   "ai-projection": "ai_projection",
+  unverified: "unverified",
 };
 
 const PROV_FROM_SQL: Record<string, Provenance> = {
@@ -50,6 +51,25 @@ const PROV_FROM_SQL: Record<string, Provenance> = {
   community: "community",
   estimated: "estimated",
   ai_projection: "ai-projection",
+  unverified: "unverified",
+};
+
+/**
+ * The same five concepts as the engine repo's `DataStatus` enum, which ADR-027
+ * makes canonical for the merge. Recorded here rather than in a doc so the
+ * mapping sits beside the values it maps, and so the merge is a rename with a
+ * reference rather than an archaeology exercise.
+ *
+ * At merge these tables adopt the canonical labels directly and this whole
+ * translation layer goes away. Deferred on purpose: renaming values in a live
+ * Postgres enum is worth doing once, against one schema, not twice against two.
+ */
+export const PROV_TO_CANONICAL: Record<Provenance, string> = {
+  verified: "VERIFIED",
+  community: "COMMUNITY_REPORTED",
+  estimated: "ESTIMATED",
+  "ai-projection": "AI_PROJECTION",
+  unverified: "UNVERIFIED",
 };
 
 /* Reads ------------------------------------------------------------------ */
