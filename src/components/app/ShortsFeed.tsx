@@ -74,12 +74,38 @@ export function ShortsFeed({ initial }: { initial: ShortsPage }) {
       <Panel className="px-6 py-16 text-center">
         <h2 className="text-sm font-medium text-ink">The video feed is empty</h2>
         <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-ink-muted">
-          Set <span className="tabular text-ink">YOUTUBE_API_KEY</span> to search
-          the whole of YouTube. Without one this falls back to the official
-          Rockstar channel feed, which is not answering right now. Either way it
-          stays empty rather than showing placeholder videos.
+          Set <span className="tabular text-ink">YOUTUBE_API_KEY</span> to search the whole of
+          YouTube. Without one this falls back to the official Rockstar channel, then to a short
+          list of official videos, and neither is answering right now. It stays empty rather than
+          showing placeholder videos.
         </p>
       </Panel>
+    );
+  }
+
+  // Topic buttons only mean something when there is a search behind them.
+  if (initial.source !== "api") {
+    return (
+      <div>
+        <p className="text-[12px] leading-relaxed text-ink-muted">
+          {initial.source === "curated"
+            ? "Official Rockstar videos, a fixed list — not a live feed. "
+            : "Latest uploads from the official Rockstar channel only. "}
+          Set <span className="tabular text-ink">YOUTUBE_API_KEY</span> to search all of YouTube by
+          topic.
+        </p>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {items.map((short) => (
+            <ShortCard
+              key={short.id}
+              short={short}
+              playing={playing === short.id}
+              onPlay={() => setPlaying(short.id)}
+              wide={initial.source === "curated"}
+            />
+          ))}
+        </div>
+      </div>
     );
   }
 
@@ -110,56 +136,12 @@ export function ShortsFeed({ initial }: { initial: ShortsPage }) {
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {items.map((short) => (
-          <Panel key={short.id} className="overflow-hidden">
-            <div className="relative aspect-[9/16] w-full bg-surface-2">
-              {playing === short.id ? (
-                <iframe
-                  src={`${short.embedUrl}&autoplay=1`}
-                  title={short.title}
-                  allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
-                  allowFullScreen
-                  className="absolute inset-0 h-full w-full"
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setPlaying(short.id)}
-                  className="group absolute inset-0 h-full w-full"
-                  aria-label={`Play ${short.title}`}
-                >
-                  {short.thumbnail ? (
-                    <Image
-                      src={short.thumbnail}
-                      alt=""
-                      fill
-                      sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                      className="object-cover opacity-85 transition-opacity group-hover:opacity-100"
-                    />
-                  ) : null}
-                  <span className="absolute inset-0 grid place-items-center">
-                    <span className="grid h-14 w-14 place-items-center rounded-full bg-accent/90 text-white transition-transform group-hover:scale-110">
-                      <Play size={22} weight="fill" />
-                    </span>
-                  </span>
-                </button>
-              )}
-            </div>
-
-            <div className="p-4">
-              <h3 className="line-clamp-2 text-[13px] leading-snug text-ink">
-                {short.title}
-              </h3>
-              <p className="mt-1.5 text-[11px] text-ink-faint">{short.channel}</p>
-              <a
-                href={short.watchUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-block text-[11px] text-accent hover:text-accent-soft"
-              >
-                Open on YouTube
-              </a>
-            </div>
-          </Panel>
+          <ShortCard
+            key={short.id}
+            short={short}
+            playing={playing === short.id}
+            onPlay={() => setPlaying(short.id)}
+          />
         ))}
       </div>
 
@@ -179,5 +161,70 @@ export function ShortsFeed({ initial }: { initial: ShortsPage }) {
         </p>
       ) : null}
     </div>
+  );
+}
+
+/** One video. A thumbnail until pressed, so nothing loads from YouTube unasked. */
+function ShortCard({
+  short,
+  playing,
+  onPlay,
+  wide = false,
+}: {
+  short: Short;
+  playing: boolean;
+  onPlay: () => void;
+  /** Trailers are 16:9. Cropping them to a Shorts frame cuts most of the picture. */
+  wide?: boolean;
+}) {
+  return (
+    <Panel className="overflow-hidden">
+      <div className={cx("relative w-full bg-surface-2", wide ? "aspect-video" : "aspect-[9/16]")}>
+        {playing ? (
+          <iframe
+            src={`${short.embedUrl}&autoplay=1`}
+            title={short.title}
+            allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
+            allowFullScreen
+            className="absolute inset-0 h-full w-full"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={onPlay}
+            className="group absolute inset-0 h-full w-full"
+            aria-label={`Play ${short.title}`}
+          >
+            {short.thumbnail ? (
+              <Image
+                src={short.thumbnail}
+                alt=""
+                fill
+                sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                className="object-cover opacity-85 transition-opacity group-hover:opacity-100"
+              />
+            ) : null}
+            <span className="absolute inset-0 grid place-items-center">
+              <span className="grid h-14 w-14 place-items-center rounded-full bg-accent/90 text-white transition-transform group-hover:scale-110">
+                <Play size={22} weight="fill" />
+              </span>
+            </span>
+          </button>
+        )}
+      </div>
+
+      <div className="p-4">
+        <h3 className="line-clamp-2 text-[13px] leading-snug text-ink">{short.title}</h3>
+        <p className="mt-1.5 text-[11px] text-ink-faint">{short.channel}</p>
+        <a
+          href={short.watchUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 inline-block text-[11px] text-accent hover:text-accent-soft"
+        >
+          Open on YouTube
+        </a>
+      </div>
+    </Panel>
   );
 }

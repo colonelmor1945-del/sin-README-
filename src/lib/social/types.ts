@@ -21,6 +21,10 @@ export interface ShortsPage {
    * only ever that one channel. The UI has to say which, because "the latest
    * GTA 6 videos" and "the latest videos Rockstar posted" are different claims
    * and only one of them is true at a time.
+   *
+   * "curated" is the last resort: a short fixed list of official Rockstar
+   * uploads, each confirmed to exist through oEmbed on every fetch. It is not
+   * a feed and never claims to be recent.
    */
-  source: "api" | "feed";
+  source: "api" | "feed" | "curated";
 }

@@ -5,15 +5,23 @@ import { cached } from "./cache";
 /**
  * Reddit feed.
  *
- * Originally written against the public .json listings. Those now answer 403
- * for unauthenticated server-side requests: Reddit closed that route after the
- * 2023 API changes and it only still works from a browser with a residential
- * IP. Anything built on it looks fine in local testing and returns nothing the
- * moment it is deployed.
+ * Two routes, tried in order:
  *
- * So this talks to the real API. Register an app at
- * https://www.reddit.com/prefs/apps as type "script", then set
- * REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET. It is free.
+ * 1. The real API, when REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET are set
+ *    (register a "script" app at https://www.reddit.com/prefs/apps, free).
+ *    Gives scores, comment counts and flair.
+ *
+ * 2. Without credentials, or when the API refuses, the public Atom feed at
+ *    /r/<sub>/<sort>/.rss. Checked 21 September 2026: 200 with 25 real
+ *    entries, while the old .json listing answers 403. The feed carries no
+ *    score, comment count or flair, so those are null rather than zero: zero
+ *    would be a claim, null is "not reported".
+ *
+ *    The anonymous budget is tiny. Reddit answered x-ratelimit-remaining 0.0
+ *    after a single request, resetting in under a minute. So each sort is
+ *    fetched once at full size and shared by every caller through the fetch
+ *    cache, and the last good answer is kept in memory so a 429 shows
+ *    slightly old posts instead of an empty panel.
  *
  * Only post metadata is used. Bodies and comments are not reproduced, and
  * every item links back to the thread.
@@ -24,8 +32,9 @@ export interface RedditPost {
   title: string;
   author: string;
   subreddit: string;
-  score: number;
-  comments: number;
+  /** Null when the source does not report it (the keyless feed). */
+  score: number | null;
+  comments: number | null;
   createdAt: number;
   permalink: string;
   thumbnail: string | null;
@@ -37,8 +46,10 @@ export interface RedditFeed {
   posts: RedditPost[];
   /** No credentials set. The UI explains rather than showing an empty list. */
   unconfigured: boolean;
-  /** Credentials exist but Reddit refused. Different problem, different fix. */
+  /** Reddit refused or did not answer, and nothing earlier is kept. */
   failed: boolean;
+  /** "api" has engagement numbers; "rss" is keyless and has none. */
+  source: "api" | "rss";
 }
 
 export const SUBREDDITS = ["GTA6", "GTA", "gtaonline"] as const;
@@ -114,11 +125,11 @@ export async function fetchReddit({
 }): Promise<RedditFeed> {
   // Reject anything that is not a plain subreddit name before it reaches a URL.
   if (!/^[A-Za-z0-9_]{2,24}$/.test(subreddit)) {
-    return { posts: [], unconfigured: false, failed: true };
+    return { posts: [], unconfigured: false, failed: true, source: "rss" };
   }
 
   const token = await accessToken();
-  if (!token) return { posts: [], unconfigured: true, failed: false };
+  if (!token) return fetchRss(subreddit, sort, limit);
 
   return cached(
     `reddit:listing:${subreddit}:${sort}:${limit}`,
@@ -129,7 +140,7 @@ export async function fetchReddit({
 
 async function loadListing(
   subreddit: string,
-  sort: string,
+  sort: "hot" | "new" | "top",
   limit: number,
   token: string,
 ): Promise<RedditFeed> {
@@ -144,7 +155,9 @@ async function loadListing(
 
     if (!response.ok) {
       console.warn("[reddit] listing failed", subreddit, response.status);
-      return { posts: [], unconfigured: false, failed: true };
+      // Credentials that stopped working should not take the panel down with
+      // them. The public feed still answers.
+      return fetchRss(subreddit, sort, limit);
     }
 
     const body = (await response.json()) as {
@@ -174,11 +187,104 @@ async function loadListing(
       })
       .filter((post) => post.id && post.title);
 
-    return { posts, unconfigured: false, failed: false };
+    return { posts, unconfigured: false, failed: false, source: "api" };
   } catch (error) {
     console.warn("[reddit] fetch threw", error);
-    return { posts: [], unconfigured: false, failed: true };
+    return fetchRss(subreddit, sort, limit);
   }
+}
+
+const lastGood = ((globalThis as { __redditRss?: Map<string, RedditPost[]> }).__redditRss ??=
+  new Map<string, RedditPost[]>());
+
+async function fetchRss(
+  subreddit: string,
+  sort: "hot" | "new" | "top",
+  limit: number,
+): Promise<RedditFeed> {
+  const key = `${subreddit}/${sort}`;
+  // Always the full 25, whatever the caller asked for, so the feed page and the
+  // ingest pipeline hit the same URL and share one cached response.
+  const url = `https://www.reddit.com/r/${subreddit}/${sort}/.rss?limit=25${sort === "top" ? "&t=week" : ""}`;
+
+  const stale = (): RedditFeed => {
+    const kept = lastGood.get(key);
+    return kept
+      ? { posts: kept.slice(0, limit), unconfigured: false, failed: false, source: "rss" }
+      : { posts: [], unconfigured: false, failed: true, source: "rss" };
+  };
+
+  try {
+    // Through the same in-process cache as everything else, which matters more
+    // here than anywhere: the anonymous budget is about one request a minute,
+    // and without an incremental cache a revalidate window alone holds nothing
+    // on Workers. A failed load throws, so it is never cached; the last good
+    // answer covers the gap instead.
+    const posts = await cached(`reddit:rss:${key}`, LISTING_TTL_MS, async () => {
+      const response = await fetch(url, {
+        headers: { "user-agent": UA },
+        next: { revalidate: 900 },
+      });
+      if (!response.ok) throw new Error(`rss ${response.status}`);
+      const parsed = parseRedditRss(await response.text(), subreddit);
+      if (parsed.length === 0) throw new Error("rss empty");
+      lastGood.set(key, parsed);
+      return parsed;
+    });
+    return { posts: posts.slice(0, limit), unconfigured: false, failed: false, source: "rss" };
+  } catch (error) {
+    console.warn("[reddit] rss failed", key, (error as Error).message);
+    return stale();
+  }
+}
+
+/**
+ * Reads Reddit's Atom feed.
+ *
+ * A regex rather than an XML parser, for the same reason as the YouTube feed:
+ * one fixed machine-generated shape and a handful of unambiguous fields. The
+ * post body sits HTML-escaped inside <content>, so it cannot contain a literal
+ * <title> that would confuse the match.
+ */
+export function parseRedditRss(xml: string, subreddit: string): RedditPost[] {
+  const posts: RedditPost[] = [];
+  for (const entry of xml.split("<entry>").slice(1)) {
+    const id = /<id>t3_([a-z0-9]+)<\/id>/i.exec(entry)?.[1];
+    const title = /<title>([^<]*)<\/title>/.exec(entry)?.[1];
+    const link = /<link href="(https:\/\/www\.reddit\.com\/r\/[^"]+)"/.exec(entry)?.[1];
+    if (!id || !title || !link) continue;
+
+    const published = /<published>([^<]+)<\/published>/.exec(entry)?.[1];
+    const createdAt = published ? Date.parse(published) : NaN;
+    const thumb = /<media:thumbnail url="([^"]+)"/.exec(entry)?.[1] ?? null;
+
+    posts.push({
+      id,
+      title: decodeXml(title),
+      author: /<name>\/u\/([^<]+)<\/name>/.exec(entry)?.[1] ?? "unknown",
+      subreddit: /<category term="([A-Za-z0-9_]+)"/.exec(entry)?.[1] ?? subreddit,
+      score: null,
+      comments: null,
+      createdAt: Number.isFinite(createdAt) ? createdAt : 0,
+      permalink: decodeXml(link),
+      thumbnail: thumb?.startsWith("https://") ? decodeXml(thumb) : null,
+      flair: null,
+      isVideo: false,
+    });
+  }
+  return posts;
+}
+
+/** XML's named entities plus numeric ones, which Reddit uses for apostrophes. */
+function decodeXml(value: string): string {
+  return value
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n: string) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
 }
 
 /** Relative time, so the feed reads as live without a client-side clock. */
