@@ -1,7 +1,7 @@
 # Project status
 
-Last reviewed: 10 September 2026. Launch target is 19 November 2026, which is
-**70 days out**.
+Last reviewed: 21 September 2026. Launch target is 19 November 2026, which is
+**59 days out**.
 
 If you are joining the project, read this first, then `README.md` for the
 architecture.
@@ -66,12 +66,22 @@ Two corollaries that have already caught us out:
 | PWA: manifest, icons, service worker, offline page | Done |
 | SEO: robots, sitemap, canonical URLs, structured data | Done |
 | Local PostgreSQL for development, on disk, no install | Done |
+| Reading a Reddit thread inside the app, body and comments | Done |
+| Content pipeline: bulk CSV in and out, audit log, queue handoff | Done |
+| Account deletion, real erasure rather than a flag | Done |
+| Short-form video: cut planning, framing, encoder settings | Planning layer done, render layer not written |
 
-17,500 lines across 24 pages and 8 API routes. 118 tests.
+17,500 lines across 25 pages and 8 API routes. 309 tests.
 
 ---
 
 ## What is left, in the order I would do it
+
+The content pipeline that used to sit at step 5 is built: every dataset table
+has an editor, bulk CSV import and export with per-row errors reported by line
+number, and every edit is written to `audit_log`. Imported rows go through the
+same Zod schema and the same Verified-citation guard as a hand edit, so bulk
+entry cannot be used as a way around the provenance rule.
 
 ### 1. Provision a database
 
@@ -107,13 +117,19 @@ registered against the real origin. Nothing is deployed yet.
 `src/lib/ratelimit.ts` is in-process. Correct for one instance, wrong for a
 fleet. Swap the Map for Redis; the call signature does not change.
 
-### 5. Content pipeline
+### 5. The video render layer
 
-Right now the dataset is a set of TypeScript files. Before launch it needs an
-editor UI over `missions`, `assets`, `map_locations` and `news_items`, and a
-verification queue so community submissions can be promoted to Verified with a
-citable source. This is what makes the platform useful on day one rather than a
-week later.
+`src/lib/video/` plans a vertical cut from a Creator Lab script, decides how a
+landscape frame becomes a 9:16 one, and carries encoder settings that were
+measured in a browser rather than copied from a tutorial. 75 tests. What is
+missing is the thin part that actually runs it: `VideoDecoder` and
+`VideoEncoder` with a muxer, driven by those plans.
+
+Two findings from the measurement worth not rediscovering. The codec string
+every example uses, `avc1.42001f`, is baseline **level 3.1** and is refused at
+1080x1920; level 4.2 is the one that works. And at that size the encode runs
+around 7 to 13 frames a second, so a 60-second short takes minutes, not
+seconds -- whatever starts it needs visible progress and a way to cancel.
 
 ---
 
