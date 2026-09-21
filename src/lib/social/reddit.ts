@@ -114,13 +114,15 @@ async function accessToken(): Promise<string | null> {
   }
 }
 
+export type RedditSort = "hot" | "new" | "top";
+
 export async function fetchReddit({
   subreddit = "GTA6",
   sort = "hot",
   limit = 12,
 }: {
   subreddit?: string;
-  sort?: "hot" | "new" | "top";
+  sort?: RedditSort;
   limit?: number;
 }): Promise<RedditFeed> {
   // Reject anything that is not a plain subreddit name before it reaches a URL.
@@ -140,7 +142,7 @@ export async function fetchReddit({
 
 async function loadListing(
   subreddit: string,
-  sort: string,
+  sort: RedditSort,
   limit: number,
   token: string,
 ): Promise<RedditFeed> {
@@ -197,11 +199,36 @@ async function loadListing(
 const lastGood = ((globalThis as { __redditRss?: Map<string, RedditPost[]> }).__redditRss ??=
   new Map<string, RedditPost[]>());
 
+/**
+ * The anonymous read, coalesced.
+ *
+ * Signed-in reads have a per-token budget; these do not. Every visitor shares
+ * one allowance of roughly a request a minute for the whole deployment, so ten
+ * people opening the feed at once have to become one request upstream, not ten.
+ * `cached` does that, and the URL already asks for the full 25 whatever the
+ * caller wanted, so a single answer serves all of them.
+ *
+ * A failure is thrown rather than returned so it is not what gets cached: a
+ * single 429 must not pin the panel to empty for the length of the TTL, when
+ * the next caller a second later might be past the limit already.
+ */
 async function fetchRss(
   subreddit: string,
-  sort: "hot" | "new" | "top",
+  sort: RedditSort,
   limit: number,
 ): Promise<RedditFeed> {
+  const feed = await cached(`reddit:rss:${subreddit}:${sort}`, LISTING_TTL_MS, async () => {
+    const loaded = await loadRss(subreddit, sort);
+    if (loaded.failed) throw new Error(`reddit rss unavailable: ${subreddit}/${sort}`);
+    return loaded;
+  }).catch(
+    (): RedditFeed => ({ posts: [], unconfigured: false, failed: true, source: "rss" }),
+  );
+
+  return feed.posts.length > limit ? { ...feed, posts: feed.posts.slice(0, limit) } : feed;
+}
+
+async function loadRss(subreddit: string, sort: RedditSort): Promise<RedditFeed> {
   const key = `${subreddit}/${sort}`;
   // Always the full 25, whatever the caller asked for, so the feed page and the
   // ingest pipeline hit the same URL and share one cached response.
@@ -210,7 +237,7 @@ async function fetchRss(
   const stale = (): RedditFeed => {
     const kept = lastGood.get(key);
     return kept
-      ? { posts: kept.slice(0, limit), unconfigured: false, failed: false, source: "rss" }
+      ? { posts: kept, unconfigured: false, failed: false, source: "rss" }
       : { posts: [], unconfigured: false, failed: true, source: "rss" };
   };
 
@@ -226,7 +253,7 @@ async function fetchRss(
     const posts = parseRedditRss(await response.text(), subreddit);
     if (posts.length === 0) return stale();
     lastGood.set(key, posts);
-    return { posts: posts.slice(0, limit), unconfigured: false, failed: false, source: "rss" };
+    return { posts, unconfigured: false, failed: false, source: "rss" };
   } catch (error) {
     console.warn("[reddit] rss threw", error);
     return stale();

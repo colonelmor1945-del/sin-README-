@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { forget } from "./cache";
 import { fetchReddit, parseRedditRss, parseThread, timeAgo } from "./reddit";
 
 // Captured from https://www.reddit.com/r/GTA6/top/.rss on 21 September 2026,
@@ -72,6 +73,10 @@ describe("fetchReddit without credentials", () => {
     vi.stubEnv("REDDIT_CLIENT_ID", "");
     vi.stubEnv("REDDIT_CLIENT_SECRET", "");
     (globalThis as { __redditRss?: Map<string, unknown> }).__redditRss?.clear();
+    // Both layers, or these tests stop testing themselves: the anonymous read
+    // is coalesced, so a second call inside the TTL is answered from the cache
+    // and never reaches the rate-limit path the test below is about.
+    forget();
   });
 
   afterEach(() => {
@@ -104,6 +109,7 @@ describe("fetchReddit without credentials", () => {
     fetchMock.mockResolvedValueOnce(new Response(FIXTURE, { status: 200 }));
     await fetchReddit({ subreddit: "GTA6", sort: "top" });
 
+    forget(); // as if the TTL had passed and the next caller went upstream
     fetchMock.mockResolvedValueOnce(new Response("", { status: 429 }));
     const feed = await fetchReddit({ subreddit: "GTA6", sort: "top" });
     expect(feed.failed).toBe(false);
@@ -114,6 +120,30 @@ describe("fetchReddit without credentials", () => {
     fetchMock.mockResolvedValue(new Response("", { status: 429 }));
     const feed = await fetchReddit({ subreddit: "GTA6", sort: "new" });
     expect(feed).toMatchObject({ failed: true, posts: [] });
+  });
+
+  it("makes one upstream call when several callers arrive together", async () => {
+    // The anonymous budget is about a request a minute for the whole
+    // deployment, so a burst of readers must not become a burst of requests.
+    fetchMock.mockImplementation(async () => new Response(FIXTURE, { status: 200 }));
+    const feeds = await Promise.all([
+      fetchReddit({ subreddit: "GTA6", sort: "hot" }),
+      fetchReddit({ subreddit: "GTA6", sort: "hot" }),
+      fetchReddit({ subreddit: "GTA6", sort: "hot" }),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(feeds.map((f) => f.posts.length)).toEqual([3, 3, 3]);
+  });
+
+  it("does not remember a failure once it clears", async () => {
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 429 }));
+    expect((await fetchReddit({ subreddit: "GTA6", sort: "new" })).failed).toBe(true);
+
+    fetchMock.mockResolvedValueOnce(new Response(FIXTURE, { status: 200 }));
+    const feed = await fetchReddit({ subreddit: "GTA6", sort: "new" });
+    expect(feed.failed).toBe(false);
+    expect(feed.posts).toHaveLength(3);
   });
 
   it("never puts an unvalidated subreddit into a url", async () => {
