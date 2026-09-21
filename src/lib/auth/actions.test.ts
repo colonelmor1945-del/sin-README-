@@ -235,6 +235,22 @@ describe("auth actions", () => {
       expect(cookieJar.set).not.toHaveBeenCalled();
     });
 
+    /**
+     * The lockout tests are slow on purpose, and the slowness is the feature.
+     *
+     * Each attempt verifies a scrypt hash at N=2^15, which costs about 32 MB
+     * and is deliberately expensive so that guessing a password is expensive.
+     * Eleven of them in a row is what the test is about, so eleven times that
+     * cost is the honest price -- and with the whole suite running in parallel
+     * it lands past Vitest's five-second default.
+     *
+     * So the timeout moves, not the cost. Lowering the work factor for tests
+     * would make these pass by no longer exercising the thing that makes the
+     * lockout worth having, and would leave a test-only cheap path one
+     * misconfiguration away from production.
+     */
+    const LOCKOUT_TIMEOUT = 30_000;
+
     it("locks out after repeated attempts from one caller", async () => {
       const ip = freshIp();
       from(ip);
@@ -246,7 +262,7 @@ describe("auth actions", () => {
 
       const blocked = await run(actions.login, { email, password: "wrong" });
       expect(String(blocked.state?.error)).toMatch(/too many/i);
-    });
+    }, LOCKOUT_TIMEOUT);
 
     it("counts attempts against the caller, not the address they typed", async () => {
       // Keying on the email would hand an attacker a fresh allowance with
@@ -264,7 +280,7 @@ describe("auth actions", () => {
       const blocked = await run(actions.login, { email, password });
       expect(String(blocked.state?.error)).toMatch(/too many/i);
       expect(cookieJar.set).not.toHaveBeenCalled();
-    });
+    }, LOCKOUT_TIMEOUT);
 
     it("still refuses the correct password once the caller is locked out", async () => {
       const ip = freshIp();
@@ -277,6 +293,6 @@ describe("auth actions", () => {
       const result = await run(actions.login, { email, password });
       expect(result.redirectedTo).toBeUndefined();
       expect(cookieJar.set).not.toHaveBeenCalled();
-    });
+    }, LOCKOUT_TIMEOUT);
   });
 });
