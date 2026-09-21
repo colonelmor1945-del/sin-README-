@@ -61,8 +61,17 @@ export default async function FeedPage() {
               <ul className="divide-y divide-line/70">
                 {reddit.posts.map((post) => (
                   <li key={post.id} className="px-5 py-3.5">
+                    {/* The thread view reads comments through the API. Without
+                        credentials it has nothing to show, so go to Reddit. */}
                     <Link
-                      href={`/dashboard/feed/thread/${post.id}`}
+                      href={
+                        reddit.source === "api"
+                          ? `/dashboard/feed/thread/${post.id}`
+                          : post.permalink
+                      }
+                      {...(reddit.source === "api"
+                        ? {}
+                        : { target: "_blank", rel: "noopener noreferrer" })}
                       className="group block"
                     >
                       <p className="line-clamp-3 text-[13px] leading-snug text-ink group-hover:text-accent">
