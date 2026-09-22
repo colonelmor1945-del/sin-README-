@@ -2,6 +2,8 @@ import "server-only";
 
 import { hashPassword } from "@/lib/auth/password";
 import { localDbEnabled } from "@/lib/db/local-postgres";
+import { DEFAULT_PROFILE, SIGNUP_CREDITS } from "@/lib/db/defaults";
+import { postgresStore } from "@/lib/db/postgres";
 import { DEV_ACCOUNT, devSeedAllowed } from "@/lib/db/seed-dev-account";
 import type { CreditReason, MoneyPlan, PlayerProfile, Tier } from "@/lib/types";
 
@@ -85,17 +87,10 @@ export interface Store {
   countUsers(): Promise<{ total: number; byTier: Record<Tier, number> }>;
 }
 
-export const DEFAULT_PROFILE: PlayerProfile = {
-  currentMoney: 2_000_000,
-  level: 35,
-  ownedAssetIds: [],
-  completedMissionIds: [],
-  playstyle: "fastest-money",
-  goal: 10_000_000,
-};
-
-/** Credits granted on signup, so a new account can try a plan immediately. */
-export const SIGNUP_CREDITS = 10;
+// Re-exported so the existing importers do not all have to change, but they
+// live in `defaults.ts` now so `postgres.ts` can read them without importing
+// this module and closing a cycle.
+export { DEFAULT_PROFILE, SIGNUP_CREDITS };
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -339,9 +334,21 @@ const devSeed: Promise<void> = (async () => {
 /**
  * Adapter selection.
  *
- * Postgres whenever DATABASE_URL is set, the in-memory adapter otherwise.
- * The import is lazy so a deployment without a database never pulls the pg
- * driver into the bundle, and a local checkout needs no Postgres at all.
+ * Postgres whenever DATABASE_URL is set or a local database was asked for, the
+ * in-memory adapter otherwise.
+ *
+ * WHY THIS IS NOT A LAZY REQUIRE ANY MORE
+ * It used to be, so that a deployment without a database never pulled the pg
+ * driver into the bundle. It did not work. `require()` of an ESM module in the
+ * Next server build hands back an empty object, so `postgresStore` was
+ * `undefined` and `getStore()` returned `undefined` -- every page behind a
+ * login answered 500 the moment either Postgres path was switched on. Nobody
+ * had noticed because nobody had switched one on yet.
+ *
+ * So the import is static and the driver is always in the server bundle. That
+ * is a real cost and it is the smaller one: the deployment that the lazy
+ * require was saving space for is the same deployment that sets DATABASE_URL
+ * and needs the driver anyway.
  *
  * In production the memory adapter is refused outright rather than silently
  * accepted: it loses every account on restart, and discovering that after
@@ -358,16 +365,8 @@ export function getStore(): Store {
     // A local PGlite database, if one was asked for. Same adapter and the same
     // SQL as production, so constraint violations and transaction behaviour
     // show up locally instead of on the deployment.
-    if (localDbEnabled()) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const local = require("@/lib/db/postgres") as typeof import("@/lib/db/postgres");
-      return local.postgresStore;
-    }
-
-    return memoryStore;
+    return localDbEnabled() ? postgresStore : memoryStore;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { postgresStore } = require("@/lib/db/postgres") as typeof import("@/lib/db/postgres");
   return postgresStore;
 }

@@ -1,4 +1,5 @@
 import "server-only";
+import { hasDatabase } from "@/lib/db/local-postgres";
 
 /**
  * Audit trail for content changes.
@@ -35,7 +36,7 @@ export async function recordAudit({
   subject: string;
   metadata?: Record<string, unknown>;
 }): Promise<void> {
-  if (!process.env.DATABASE_URL) return;
+  if (!hasDatabase()) return;
 
   try {
     const { writeAudit } = await import("@/lib/content/postgres");

@@ -1,7 +1,6 @@
 import "server-only";
 
-import { Pool } from "pg";
-
+import { pool } from "@/lib/db/postgres";
 import type { Asset, MapPin, Mission, PinKind, Provenance } from "@/lib/types";
 import type { NewsCategory, NewsItem } from "@/lib/data/news";
 
@@ -12,27 +11,12 @@ import type { NewsCategory, NewsItem } from "@/lib/data/news";
  * one serves the game dataset. They share a pool but nothing else, and keeping
  * them apart means a content migration cannot accidentally touch accounts.
  *
- * Imported lazily from src/lib/content/store.ts, so a deployment with no
- * database never loads the driver.
+ * The pool is now literally that file's, imported rather than rebuilt. This
+ * file used to construct its own from DATABASE_URL and throw without one,
+ * which meant `npm run dev:db` gave you working accounts and a content editor
+ * that threw on every save -- two halves of the same app disagreeing about
+ * whether a database existed.
  */
-
-const g = globalThis as { __pgPool?: Pool };
-
-function pool(): Pool {
-  if (g.__pgPool) return g.__pgPool;
-
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("DATABASE_URL is not set.");
-
-  g.__pgPool = new Pool({
-    connectionString,
-    ssl: /localhost|127\.0\.0\.1/.test(connectionString)
-      ? undefined
-      : { rejectUnauthorized: false },
-    max: 10,
-  });
-  return g.__pgPool;
-}
 
 /* Provenance mapping.
  *

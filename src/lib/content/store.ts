@@ -1,5 +1,6 @@
 import "server-only";
 
+import { hasDatabase } from "@/lib/db/local-postgres";
 import { ASSETS } from "@/lib/data/assets";
 import { MISSIONS } from "@/lib/data/missions";
 import { MAP_PINS } from "@/lib/data/map";
@@ -35,11 +36,11 @@ export interface ContentSource {
 }
 
 export function contentSource(): ContentSource {
-  if (!process.env.DATABASE_URL) {
+  if (!hasDatabase()) {
     return {
       writable: false,
       reason:
-        "Content is being served from the seed files in the repository. Set DATABASE_URL and apply the schema to edit it here instead of in a commit.",
+        "Content is being served from the seed files in the repository. Run npm run dev:db for a local database, or set DATABASE_URL, to edit it here instead of in a commit.",
     };
   }
   return { writable: true };
@@ -59,7 +60,7 @@ async function fromDatabase<T>(
   fallback: T[],
   what: string,
 ): Promise<T[]> {
-  if (!process.env.DATABASE_URL) return fallback;
+  if (!hasDatabase()) return fallback;
   try {
     const rows = await run();
     return rows.length > 0 ? rows : fallback;

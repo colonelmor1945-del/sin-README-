@@ -8,8 +8,8 @@ import {
   type PgClientLike,
   type PgLike,
 } from "@/lib/db/local-postgres";
+import { DEFAULT_PROFILE, SIGNUP_CREDITS } from "@/lib/db/defaults";
 import type { Account, Store } from "@/lib/db/store";
-import { DEFAULT_PROFILE, SIGNUP_CREDITS } from "@/lib/db/store";
 import type {
   CreditReason,
   MoneyPlan,
@@ -44,7 +44,12 @@ import type {
 
 const g = globalThis as { __pgPool?: Pool };
 
-function pool(): PgLike {
+/**
+ * Exported so `content/postgres.ts` uses this one rather than opening a second.
+ * It had its own copy that read DATABASE_URL alone, so with the local database
+ * the user store worked and every content write threw.
+ */
+export function pool(): PgLike {
   if (g.__pgPool) return g.__pgPool as unknown as PgLike;
 
   const connectionString = process.env.DATABASE_URL;

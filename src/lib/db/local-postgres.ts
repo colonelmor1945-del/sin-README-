@@ -77,6 +77,21 @@ export function localDbEnabled(
   return env.LOCAL_DB === "1";
 }
 
+/**
+ * Whether there is a database at all -- a real one, or the local PGlite.
+ *
+ * The one thing to check before deciding a feature can write. Three separate
+ * places used to test `process.env.DATABASE_URL` directly and each was wrong
+ * in the same way: with `npm run dev:db` there is a real PostgreSQL, and they
+ * all reported there was none. The content editors went read-only, the CSV
+ * import refused, and the audit log returned without writing a row -- so the
+ * one setup that needs no account anywhere was also the one where half the
+ * admin surface quietly did nothing.
+ */
+export function hasDatabase(env: Record<string, string | undefined> = process.env): boolean {
+  return Boolean(env.DATABASE_URL) || localDbEnabled(env);
+}
+
 const g = globalThis as { __localPg?: Promise<PgLike> };
 
 export function localPool(): Promise<PgLike> {

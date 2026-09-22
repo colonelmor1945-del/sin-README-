@@ -14,6 +14,22 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
 
   /*
+   * Packages the server must load itself rather than have bundled.
+   *
+   * PGlite ships PostgreSQL as WebAssembly and locates the .wasm next to its
+   * own module with `new URL(..., import.meta.url)`, then hands that URL to
+   * node:fs. Bundled, it gets the bundler's URL rather than the runtime's, and
+   * fs rejects it with a message that reads like a contradiction: "must be of
+   * type string or an instance of URL. Received an instance of URL." Two
+   * classes with the same name from different realms.
+   *
+   * Left external, it is loaded by Node and the URL is the one fs expects.
+   * It is a devDependency and only `npm run dev:db` ever reaches it, so
+   * nothing here follows it into a production bundle.
+   */
+  serverExternalPackages: ["@electric-sql/pglite"],
+
+  /*
    * Remote image hosts.
    *
    * next/image THROWS on an unlisted hostname rather than falling back, so a

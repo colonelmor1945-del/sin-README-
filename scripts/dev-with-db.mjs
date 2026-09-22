@@ -7,10 +7,15 @@
  * against the same schema.sql and the same adapter production uses.
  *
  * Nothing to install and no account anywhere. Delete .data to start clean.
+ *
+ * Arguments are passed straight through, so `npm run dev:db -- -p 3020` picks
+ * a port the same way `npm run dev` does. Without this the flags were
+ * swallowed here and the server came up on 3000 whatever you asked for, which
+ * matters on a machine running more than one of these projects at once.
  */
 import { spawnSync } from "node:child_process";
 
-const result = spawnSync("npx", ["next", "dev"], {
+const result = spawnSync("npx", ["next", "dev", ...process.argv.slice(2)], {
   stdio: "inherit",
   shell: true,
   env: { ...process.env, LOCAL_DB: "1" },
