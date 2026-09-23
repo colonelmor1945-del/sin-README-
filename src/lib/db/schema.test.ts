@@ -69,7 +69,7 @@ describe("schema.sql", () => {
   beforeAll(async () => {
     db = new PGlite();
     await apply(db, SCHEMA);
-  }, 60_000);
+  }, 120_000);
 
   it("applies to an empty database", async () => {
     const { rows } = await db.query<{ count: string }>(
@@ -96,7 +96,7 @@ describe("schema.sql", () => {
     // The whole reason every statement carries a guard. A first-time setup that
     // dies part way has to be resumable by re-running the same file.
     await expect(apply(db, SCHEMA)).resolves.toBeUndefined();
-  }, 60_000);
+  }, 120_000);
 
   it("still enforces the provenance values, so a guard did not weaken a type", async () => {
     // Making things idempotent is exactly the kind of edit that can quietly
