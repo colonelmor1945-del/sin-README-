@@ -1,7 +1,7 @@
 # Project status
 
-Last reviewed: 21 September 2026. Launch target is 19 November 2026, which is
-**59 days out**.
+Last reviewed: 23 September 2026. Launch target is 19 November 2026, which is
+**57 days out**.
 
 If you are joining the project, read this first, then `README.md` for the
 architecture.
@@ -70,8 +70,9 @@ Two corollaries that have already caught us out:
 | Content pipeline: bulk CSV in and out, audit log, queue handoff | Done |
 | Account deletion, real erasure rather than a flag | Done |
 | Short-form video: cut planning, framing, encoder settings | Planning layer done, render layer not written |
+| Error and not-found pages, including a root-layout fallback | Done |
 
-17,500 lines across 25 pages and 8 API routes. 309 tests.
+17,500 lines across 25 pages and 8 API routes. 335 tests.
 
 ---
 
@@ -135,12 +136,13 @@ seconds -- whatever starts it needs visible progress and a way to cancel.
 
 ## Known gaps, stated plainly
 
-- **Test coverage is deep in places and absent in others.** 118 tests, and they
+- **Test coverage is deep in places and absent in others.** 335 tests, and they
   are concentrated where being wrong is expensive: the formulas in `calc.ts`,
   pricing, the ingestion trust ceilings, the payment state machine, the service
   worker's caching rules, and the schema itself against a real PostgreSQL.
-  There is nothing covering the React components or the server actions, so a
-  broken form is still something you find by opening it.
+  The content actions and the password hash now have their own tests; both
+  were gaps that hid real bugs. There is still nothing covering the React
+  components, so a broken form is something you find by opening it.
 - **No email.** No verification, no password reset. A forgotten password is
   currently unrecoverable.
 - **Rate limits and the Reddit token still live in process memory**, so they
