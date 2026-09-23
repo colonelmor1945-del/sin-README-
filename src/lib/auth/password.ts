@@ -26,22 +26,57 @@ const scrypt = promisify(crypto.scrypt) as (
   options: crypto.ScryptOptions,
 ) => Promise<Buffer>;
 
-const N = 2 ** 15; // CPU and memory cost. About 32 MB per hash at r=8.
+/** CPU and memory cost. About 32 MB per hash at r=8. */
+export const DEFAULT_COST = 2 ** 15;
 const R = 8;
 const P = 1;
 const KEY_LEN = 64;
 const SALT_LEN = 16;
 
+/**
+ * The work factor to hash new passwords with.
+ *
+ * Always DEFAULT_COST in production. Outside it, SCRYPT_COST may lower it,
+ * and only the test suite does.
+ *
+ * WHY THIS EXISTS
+ * Every test that signs anyone in pays for a real hash -- deliberately
+ * expensive, 32 MB, and the lockout tests do eleven in a row. On a loaded
+ * machine that is past any timeout worth setting, so those tests failed by the
+ * clock, intermittently, which teaches people to rerun rather than to look.
+ * None of them are about the hash: they are about the counter that limits
+ * attempts, and the cost is incidental to every assertion they make.
+ *
+ * WHY IT IS SAFE
+ * Production ignores the variable outright rather than validating it, so a
+ * stray value in a deployment environment cannot weaken anything -- and it is
+ * ignored rather than rejected, because throwing on a stray env var would turn
+ * a typo into an outage. The parameters travel with each hash, so a cheap
+ * test hash verifies at its own cost and never teaches the verifier anything.
+ * `password.test.ts` pins the production number, which nothing did before:
+ * changing 2**15 to 2**12 in this file used to break no test at all.
+ */
+export function hashCost(env: Record<string, string | undefined> = process.env): number {
+  if (env.NODE_ENV === "production") return DEFAULT_COST;
+
+  const asked = Number(env.SCRYPT_COST);
+  const usable =
+    Number.isInteger(asked) && asked >= 2 ** 10 && asked <= DEFAULT_COST &&
+    (asked & (asked - 1)) === 0; // scrypt requires a power of two
+  return usable ? asked : DEFAULT_COST;
+}
+
 // The default maxmem is too low for N=2^15 and throws. 128 * N * r, doubled.
-const MAX_MEM = 256 * N * R;
+const maxMem = (n: number) => 256 * n * R;
 
 export async function hashPassword(password: string): Promise<string> {
+  const N = hashCost();
   const salt = crypto.randomBytes(SALT_LEN);
   const key = await scrypt(password.normalize("NFKC"), salt, KEY_LEN, {
     N,
     r: R,
     p: P,
-    maxmem: MAX_MEM,
+    maxmem: maxMem(N),
   });
   return [
     "scrypt",
@@ -99,10 +134,14 @@ export const hashToken = (token: string) =>
  * does not exist, so signup status cannot be probed by response timing.
  */
 export async function fakeVerify(): Promise<void> {
+  // The same cost the real one would pay, so the decoy stays a decoy: a
+  // hardcoded factor here would burn a different amount of time than a real
+  // verification and hand back the timing difference it exists to hide.
+  const N = hashCost();
   await scrypt("decoy", crypto.randomBytes(SALT_LEN), KEY_LEN, {
     N,
     r: R,
     p: P,
-    maxmem: MAX_MEM,
+    maxmem: maxMem(N),
   });
 }

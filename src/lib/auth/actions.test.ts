@@ -19,7 +19,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *
  * Each of those is a one-line change away from being lost, and losing any of
  * them leaves every test that checks "can a user sign in" passing.
+ *
+ * WHY THESE RUN AT A LOWER WORK FACTOR
+ * Every test here signs in or registers, and each of those pays for a real
+ * scrypt hash -- 32 MB, deliberately expensive. The lockout tests do eleven in
+ * a row, which on a loaded machine is past any timeout worth setting, so they
+ * failed by the clock rather than by a bug. Intermittently, which is the worst
+ * way for a test to fail: it teaches people to rerun rather than to look.
+ *
+ * Raising the timeout was tried twice and is the wrong lever -- it is a race
+ * against how busy the machine happens to be, and it makes a genuinely hung
+ * test take half a minute to say so.
+ *
+ * Nothing in this file is about the hash. These tests are about the counter
+ * that limits attempts and the cookie that is or is not set; the cost is
+ * incidental to every assertion below. So the cost comes down here and is
+ * pinned at full strength in `password.test.ts`, where it is the subject.
+ * `hashCost` ignores this variable outright in production.
  */
+
+process.env.SCRYPT_COST = "4096";
+
+// Hooks get their own budget, and the timeout is not shared with tests: the
+// beforeEach below registers an account, so setting only testTimeout left it
+// failing in the hook at ten seconds while every test had thirty.
+vi.setConfig({ testTimeout: 20_000, hookTimeout: 20_000 });
 
 /* --- The Next.js request context ---------------------------------------- */
 
@@ -235,22 +259,6 @@ describe("auth actions", () => {
       expect(cookieJar.set).not.toHaveBeenCalled();
     });
 
-    /**
-     * The lockout tests are slow on purpose, and the slowness is the feature.
-     *
-     * Each attempt verifies a scrypt hash at N=2^15, which costs about 32 MB
-     * and is deliberately expensive so that guessing a password is expensive.
-     * Eleven of them in a row is what the test is about, so eleven times that
-     * cost is the honest price -- and with the whole suite running in parallel
-     * it lands past Vitest's five-second default.
-     *
-     * So the timeout moves, not the cost. Lowering the work factor for tests
-     * would make these pass by no longer exercising the thing that makes the
-     * lockout worth having, and would leave a test-only cheap path one
-     * misconfiguration away from production.
-     */
-    const LOCKOUT_TIMEOUT = 30_000;
-
     it("locks out after repeated attempts from one caller", async () => {
       const ip = freshIp();
       from(ip);
@@ -262,7 +270,7 @@ describe("auth actions", () => {
 
       const blocked = await run(actions.login, { email, password: "wrong" });
       expect(String(blocked.state?.error)).toMatch(/too many/i);
-    }, LOCKOUT_TIMEOUT);
+    });
 
     it("counts attempts against the caller, not the address they typed", async () => {
       // Keying on the email would hand an attacker a fresh allowance with
@@ -280,7 +288,7 @@ describe("auth actions", () => {
       const blocked = await run(actions.login, { email, password });
       expect(String(blocked.state?.error)).toMatch(/too many/i);
       expect(cookieJar.set).not.toHaveBeenCalled();
-    }, LOCKOUT_TIMEOUT);
+    });
 
     it("still refuses the correct password once the caller is locked out", async () => {
       const ip = freshIp();
@@ -293,6 +301,6 @@ describe("auth actions", () => {
       const result = await run(actions.login, { email, password });
       expect(result.redirectedTo).toBeUndefined();
       expect(cookieJar.set).not.toHaveBeenCalled();
-    }, LOCKOUT_TIMEOUT);
+    });
   });
 });
