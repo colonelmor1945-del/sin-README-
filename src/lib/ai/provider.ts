@@ -11,11 +11,20 @@ export interface AiProvider {
   readonly id: "claude" | "heuristic";
   readonly label: string;
 
-  /** Streams the assistant reply as plain text chunks. */
+  /**
+   * Streams the assistant reply as plain text chunks.
+   *
+   * onUsage, when given, is called once with real token usage after the
+   * reply finishes — the caller's only way to find out what a chat request
+   * actually cost, since that is not knowable before the model answers. It
+   * may return a promise; callers that award it should await it, which the
+   * built-in providers do before this generator completes.
+   */
   chat(input: {
     messages: ChatMessage[];
     profile: PlayerProfile;
     signal?: AbortSignal;
+    onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void | Promise<void>;
   }): AsyncIterable<string>;
 
   /** Produces a structured, validated plan. Never free text. */

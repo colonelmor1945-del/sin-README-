@@ -36,6 +36,26 @@ export interface SessionRecord {
   expiresAt: number;
 }
 
+export type SubmissionStatus = "pending" | "promoted" | "rejected";
+
+/** A visitor's claim plus the URL it is based on. See schema.sql for why this persists. */
+export interface PublicSubmission {
+  id: string;
+  claim: string;
+  sourceUrl: string;
+  submittedBy: string | null;
+  claimKey: string;
+  status: SubmissionStatus;
+  createdAt: string;
+  /**
+   * Never rendered — this exists so the pipeline can tell two submissions
+   * from the same visitor apart from two submissions from different
+   * visitors. Without it, one person submitting the same claim five times
+   * looks identical, for corroboration purposes, to five people agreeing.
+   */
+  ipHash: string | null;
+}
+
 export interface Store {
   /* Identity */
   createUser(input: {
@@ -65,6 +85,9 @@ export interface Store {
   /* Usage and credits */
   bumpDailyQueries(userId: string): Promise<number>;
   getDailyQueries(userId: string): Promise<number>;
+  /** Adds `minor` (currency minor units) to today's model-spend total and returns it. */
+  bumpDailySpend(userId: string, minor: number): Promise<number>;
+  getDailySpend(userId: string): Promise<number>;
   getCredits(userId: string): Promise<number>;
   /** Atomic in the SQL adapter. Returns the new balance, or null if short. */
   spendCredits(userId: string, amount: number, reason: CreditReason): Promise<number | null>;
@@ -72,6 +95,17 @@ export interface Store {
 
   /* Admin */
   countUsers(): Promise<{ total: number; byTier: Record<Tier, number> }>;
+
+  /* Public submissions */
+  createSubmission(input: {
+    claim: string;
+    sourceUrl: string;
+    submittedBy: string | null;
+    claimKey: string;
+    ipHash: string | null;
+  }): Promise<PublicSubmission>;
+  /** Most recent first. Used to fold submissions into the ingest pipeline's corroboration count. */
+  listSubmissions(limit: number): Promise<PublicSubmission[]>;
 }
 
 export const DEFAULT_PROFILE: PlayerProfile = {
@@ -93,6 +127,8 @@ interface Row {
   profile: PlayerProfile;
   plans: MoneyPlan[];
   queries: Map<string, number>;
+  /** Model spend in minor currency units, keyed by day. */
+  spend: Map<string, number>;
   credits: number;
 }
 
@@ -105,6 +141,7 @@ interface Db {
   byEmail: Map<string, string>;
   byUsername: Map<string, string>;
   sessions: Map<string, SessionRecord>;
+  submissions: PublicSubmission[];
 }
 
 const g = globalThis as { __labDb?: Db };
@@ -115,6 +152,7 @@ const db: Db =
     byEmail: new Map(),
     byUsername: new Map(),
     sessions: new Map(),
+    submissions: [],
   });
 
 const publicAccount = (r: AccountRecord): Account => ({
@@ -147,6 +185,7 @@ export const memoryStore: Store = {
       profile: { ...DEFAULT_PROFILE },
       plans: [],
       queries: new Map(),
+      spend: new Map(),
       credits: SIGNUP_CREDITS,
     });
     db.byEmail.set(record.email, id);
@@ -245,6 +284,19 @@ export const memoryStore: Store = {
     return db.rows.get(userId)?.queries.get(today()) ?? 0;
   },
 
+  async bumpDailySpend(userId, minor) {
+    const row = db.rows.get(userId);
+    if (!row) return 0;
+    const key = today();
+    const next = (row.spend.get(key) ?? 0) + minor;
+    row.spend.set(key, next);
+    return next;
+  },
+
+  async getDailySpend(userId) {
+    return db.rows.get(userId)?.spend.get(today()) ?? 0;
+  },
+
   async getCredits(userId) {
     return db.rows.get(userId)?.credits ?? 0;
   },
@@ -267,6 +319,25 @@ export const memoryStore: Store = {
     const byTier: Record<Tier, number> = { free: 0, pro: 0, elite: 0 };
     for (const row of db.rows.values()) byTier[row.account.tier] += 1;
     return { total: db.rows.size, byTier };
+  },
+
+  async createSubmission({ claim, sourceUrl, submittedBy, claimKey, ipHash }) {
+    const submission: PublicSubmission = {
+      id: crypto.randomUUID(),
+      claim,
+      sourceUrl,
+      submittedBy,
+      claimKey,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      ipHash,
+    };
+    db.submissions.unshift(submission);
+    return submission;
+  },
+
+  async listSubmissions(limit) {
+    return db.submissions.slice(0, limit);
   },
 };
 

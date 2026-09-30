@@ -121,6 +121,7 @@ export default async function QueuePage() {
 
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-faint">
                         <span>{labelFor(item.sourceId)}</span>
+                        {item.submittedBy ? <span>by {item.submittedBy}</span> : null}
                         <span>{timeAgo(item.publishedAt)}</span>
                         {item.score !== undefined ? (
                           <span className="tabular inline-flex items-center gap-1">

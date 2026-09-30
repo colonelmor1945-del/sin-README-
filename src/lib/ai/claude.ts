@@ -42,7 +42,7 @@ export const claudeProvider: AiProvider = {
   id: "claude",
   label: "Claude Opus 5",
 
-  async *chat({ messages, profile, signal }) {
+  async *chat({ messages, profile, signal, onUsage }) {
     const stream = client().beta.messages.stream(
       {
         model: MODEL,
@@ -73,6 +73,14 @@ export const claudeProvider: AiProvider = {
     }
 
     const final = await stream.finalMessage();
+    // Awaited so the caller's spend record lands before this generator
+    // completes — the for-await loop in the route does not see "done" until
+    // this resolves, so the cost is on the books before the next request
+    // from the same user can be evaluated.
+    await onUsage?.({
+      inputTokens: final.usage.input_tokens,
+      outputTokens: final.usage.output_tokens,
+    });
     if (final.stop_reason === "refusal") throw new AiRefusalError(null);
   },
 
