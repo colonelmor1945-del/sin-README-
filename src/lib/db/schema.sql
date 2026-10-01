@@ -303,6 +303,13 @@ CREATE TABLE IF NOT EXISTS ai_usage_daily (
   cost_minor INT  NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, usage_day)
 );
+-- CREATE TABLE above only shapes a fresh database, and this file does not
+-- migrate. A database created before the cost cap existed already has this
+-- table, so CREATE TABLE IF NOT EXISTS skips it silently and cost_minor
+-- never appears — and the first spend write then fails at runtime on a
+-- column that is missing. Additive and idempotent, same as the provenance
+-- enum above.
+ALTER TABLE ai_usage_daily ADD COLUMN IF NOT EXISTS cost_minor INT NOT NULL DEFAULT 0;
 
 -- --------------------------------------------------------------- credits ---
 

@@ -98,6 +98,37 @@ describe("schema.sql", () => {
     await expect(apply(db, SCHEMA)).resolves.toBeUndefined();
   }, 60_000);
 
+  it("adds a column to a table an older database already has", async () => {
+    // This file does not migrate, and CREATE TABLE IF NOT EXISTS skips a table
+    // that exists rather than reconciling its columns. So a database created
+    // before a column was added keeps the old shape, silently, and the first
+    // write to the new column fails at runtime instead of at deploy time.
+    // This caught cost_minor missing from a real deployment, so it is tested
+    // against the real engine on a database that genuinely predates it.
+    // Built by applying the real file and then removing the column, rather
+    // than hand-writing an old table: a stub drifts from the real shape and
+    // starts failing on unrelated statements, which tests the fixture
+    // instead of the schema.
+    const old = new PGlite();
+    await apply(old, SCHEMA);
+    await old.query("ALTER TABLE ai_usage_daily DROP COLUMN cost_minor");
+
+    const before = await old.query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'ai_usage_daily'`,
+    );
+    expect(before.rows.map((r) => r.column_name)).not.toContain("cost_minor");
+
+    await apply(old, SCHEMA);
+
+    const after = await old.query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'ai_usage_daily'`,
+    );
+    expect(after.rows.map((r) => r.column_name)).toContain("cost_minor");
+    await old.close();
+  }, 60_000);
+
   it("still enforces the provenance values, so a guard did not weaken a type", async () => {
     // Making things idempotent is exactly the kind of edit that can quietly
     // turn a constrained column into a free text one. The database is supposed
