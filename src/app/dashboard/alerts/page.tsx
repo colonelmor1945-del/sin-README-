@@ -2,8 +2,9 @@ import Link from "next/link";
 
 import { PageHeader } from "@/components/app/PageHeader";
 import { ProvenanceTag } from "@/components/ProvenanceTag";
-import { Panel, PanelHead, cx } from "@/components/ui/primitives";
+import { ButtonLink, Panel, PanelHead, cx } from "@/components/ui/primitives";
 import { requireSession } from "@/lib/auth/session";
+import { can } from "@/lib/entitlements";
 import { getStore } from "@/lib/db/store";
 import { KIND_META, buildNotifications, type NotificationKind } from "@/lib/notifications";
 
@@ -19,7 +20,33 @@ const KIND_TONE: Record<NotificationKind, string> = {
 };
 
 export default async function AlertsPage() {
-  const { userId } = await requireSession();
+  const { userId, account } = await requireSession();
+
+  // Declared Elite in the entitlement matrix and enforced nowhere, so the
+  // whole feature was free. The matrix is the claim; this is the enforcement.
+  if (!can(account.tier, "alerts")) {
+    return (
+      <>
+        <PageHeader
+          title="Alerts"
+          lead="What changed since you last looked, and what it means for your money."
+        />
+        <div className="px-4 py-6 sm:px-8">
+          <Panel className="flex flex-col items-center gap-3 px-6 py-20 text-center">
+            <h2 className="text-sm font-medium text-ink">This is an Elite feature</h2>
+            <p className="max-w-sm text-[13px] leading-relaxed text-ink-muted">
+              Alerts watch your own portfolio and plans and tell you when a
+              payback period, a price or the launch date moves.
+            </p>
+            <ButtonLink href="/dashboard/settings" size="sm" className="mt-1">
+              Go Elite
+            </ButtonLink>
+          </Panel>
+        </div>
+      </>
+    );
+  }
+
   const store = getStore();
 
   const [profile, plans, credits] = await Promise.all([

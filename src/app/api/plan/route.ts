@@ -4,7 +4,7 @@ import { z } from "zod";
 import { AiRefusalError, getAiProvider } from "@/lib/ai";
 import { getSession } from "@/lib/auth/session";
 import { getStore } from "@/lib/db/store";
-import { CREDIT_COST } from "@/lib/entitlements";
+import { CREDIT_COST, can } from "@/lib/entitlements";
 import { BUDGETS, rateLimit } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
@@ -35,7 +35,18 @@ export async function POST(request: Request) {
   if (!session) {
     return NextResponse.json({ error: "Sign in to use this." }, { status: 401 });
   }
-  const { userId } = session;
+  const { userId, account } = session;
+
+  // The capability check belongs here and not only in the page: a page gate
+  // hides a button, and this is the thing that actually costs us a model call.
+  // It was missing, which made personalised plans free for anyone with the ten
+  // credits a new account starts with — three Pro-tier plans, at our expense.
+  if (!can(account.tier, "ai.plan")) {
+    return NextResponse.json(
+      { error: "Personalised plans are a Pro feature.", code: "tier" },
+      { status: 403 },
+    );
+  }
 
   const limit = rateLimit(`plan:${userId}`, BUDGETS.aiPlan);
   if (!limit.ok) {

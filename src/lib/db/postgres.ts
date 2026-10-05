@@ -353,6 +353,26 @@ export const postgresStore: Store = {
           [userId, profile.ownedAssetIds],
         );
       }
+
+      // Completed missions, the same way. This was read on the way in and
+      // never written on the way out, so on a real database the list was
+      // always empty: the profile form lost it, and the plan generator — a
+      // paid feature — was told the player had completed nothing. The
+      // in-memory store kept it, which is why it only broke in production.
+      //
+      // The insert is filtered through `missions` because mission_id is a
+      // foreign key: a profile naming a mission that no longer exists would
+      // otherwise fail the whole transaction and lose the money and level
+      // along with it.
+      await client.query("DELETE FROM user_missions WHERE user_id = $1", [userId]);
+      if (profile.completedMissionIds.length > 0) {
+        await client.query(
+          `INSERT INTO user_missions (user_id, mission_id)
+           SELECT $1, m.id FROM missions m WHERE m.id = ANY($2::text[])
+           ON CONFLICT DO NOTHING`,
+          [userId, profile.completedMissionIds],
+        );
+      }
     });
   },
 
