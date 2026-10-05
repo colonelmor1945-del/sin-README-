@@ -9,7 +9,7 @@ import {
   type PgLike,
 } from "@/lib/db/local-postgres";
 import { DEFAULT_PROFILE, SIGNUP_CREDITS } from "@/lib/db/defaults";
-import type { Account, Store } from "@/lib/db/store";
+import type { Account, PublicSubmission, Store } from "@/lib/db/store";
 import type {
   CreditReason,
   MoneyPlan,
@@ -498,6 +498,26 @@ export const postgresStore: Store = {
     return rows[0]?.queries ?? 0;
   },
 
+  async bumpDailySpend(userId, minor) {
+    const { rows } = await pool().query<{ cost_minor: number }>(
+      `INSERT INTO ai_usage_daily (user_id, usage_day, cost_minor)
+       VALUES ($1, CURRENT_DATE, $2)
+       ON CONFLICT (user_id, usage_day)
+       DO UPDATE SET cost_minor = ai_usage_daily.cost_minor + $2
+       RETURNING cost_minor`,
+      [userId, minor],
+    );
+    return rows[0]?.cost_minor ?? 0;
+  },
+
+  async getDailySpend(userId) {
+    const { rows } = await pool().query<{ cost_minor: number }>(
+      "SELECT cost_minor FROM ai_usage_daily WHERE user_id = $1 AND usage_day = CURRENT_DATE",
+      [userId],
+    );
+    return rows[0]?.cost_minor ?? 0;
+  },
+
   async getCredits(userId) {
     const { rows } = await pool().query<{ balance: number }>(
       "SELECT balance FROM lab_credits WHERE user_id = $1",
@@ -566,6 +586,63 @@ export const postgresStore: Store = {
       total += Number(row.count);
     }
     return { total, byTier };
+  },
+
+  /* Public submissions ----------------------------------------------------- */
+
+  async createSubmission({ claim, sourceUrl, submittedBy, claimKey, ipHash }) {
+    const { rows } = await pool().query<{
+      id: string;
+      claim: string;
+      source_url: string;
+      submitted_by: string | null;
+      claim_key: string;
+      status: PublicSubmission["status"];
+      created_at: string;
+      submitter_ip_hash: string | null;
+    }>(
+      `INSERT INTO public_submissions (claim, source_url, submitted_by, claim_key, submitter_ip_hash)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, claim, source_url, submitted_by, claim_key, status, created_at, submitter_ip_hash`,
+      [claim, sourceUrl, submittedBy, claimKey, ipHash],
+    );
+    const row = rows[0];
+    return {
+      id: row.id,
+      claim: row.claim,
+      sourceUrl: row.source_url,
+      submittedBy: row.submitted_by,
+      claimKey: row.claim_key,
+      status: row.status,
+      createdAt: row.created_at,
+      ipHash: row.submitter_ip_hash,
+    };
+  },
+
+  async listSubmissions(limit) {
+    const { rows } = await pool().query<{
+      id: string;
+      claim: string;
+      source_url: string;
+      submitted_by: string | null;
+      claim_key: string;
+      status: PublicSubmission["status"];
+      created_at: string;
+      submitter_ip_hash: string | null;
+    }>(
+      "SELECT id, claim, source_url, submitted_by, claim_key, status, created_at, submitter_ip_hash FROM public_submissions ORDER BY created_at DESC LIMIT $1",
+      [limit],
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      claim: row.claim,
+      sourceUrl: row.source_url,
+      submittedBy: row.submitted_by,
+      claimKey: row.claim_key,
+      status: row.status,
+      createdAt: row.created_at,
+      ipHash: row.submitter_ip_hash,
+    }));
   },
 };
 

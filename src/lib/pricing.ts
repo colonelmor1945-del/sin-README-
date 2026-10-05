@@ -79,6 +79,46 @@ export const PRICING: Record<Tier, TierPricing> = {
   },
 };
 
+/* Cost cap ----------------------------------------------------------------
+ *
+ * dailyQueries alone does not bound spend: a request that fills its
+ * max_tokens ceiling costs far more than a short one, so a script that hits
+ * the daily query count while maximising output length every time can cost
+ * many times the subscription. This is the cap the header comment above
+ * promises and dailyQueries cannot deliver on its own.
+ *
+ * costMinorForUsage prices real provider usage against the same per-million
+ * rates the header comment estimates from ($5 input / $25 output), so the
+ * cap enforced here and the invariant documented there stay the same
+ * arithmetic. It intentionally ignores the cheaper cached-input rate: for a
+ * safety ceiling, overcounting cost (blocking a little early) is the safe
+ * direction to be wrong in.
+ */
+
+const MODEL_INPUT_PER_MILLION_MINOR = 500; // $5.00
+const MODEL_OUTPUT_PER_MILLION_MINOR = 2_500; // $25.00
+
+export function costMinorForUsage(usage: { inputTokens: number; outputTokens: number }): number {
+  return Math.ceil(
+    (usage.inputTokens * MODEL_INPUT_PER_MILLION_MINOR +
+      usage.outputTokens * MODEL_OUTPUT_PER_MILLION_MINOR) /
+      1_000_000,
+  );
+}
+
+/**
+ * Hard ceiling on model spend per account per day, derived from what the
+ * tier actually charges rather than picked by feel: monthly price spread
+ * across 30 days, floored so 30 maxed-out days never reach the monthly
+ * charge. free is null because it has no price to divide by — its 5/day
+ * query count is the only cap it needs.
+ */
+export const DAILY_COST_CAP_MINOR: Record<Tier, number | null> = {
+  free: null,
+  pro: Math.floor(PRICING.pro.monthlyMinor / 30),
+  elite: Math.floor(PRICING.elite.monthlyMinor / 30),
+};
+
 /* Discounts -------------------------------------------------------------- */
 
 export type DiscountKind =

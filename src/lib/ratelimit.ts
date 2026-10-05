@@ -53,6 +53,8 @@ export const BUDGETS = {
   aiPlan: { limit: 6, windowMs: 60_000 },
   aiCreator: { limit: 10, windowMs: 60_000 },
   read: { limit: 120, windowMs: 60_000 },
+  /** Public, unauthenticated: a source URL is required, but nothing else gates it. */
+  submission: { limit: 5, windowMs: 60 * 60_000 },
 } as const;
 
 /** Opportunistic sweep so the map does not grow without bound. */

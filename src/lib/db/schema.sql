@@ -69,6 +69,9 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE TYPE user_role AS ENUM ('member', 'editor', 'admin');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE submission_status AS ENUM ('pending', 'promoted', 'rejected');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ---------------------------------------------------------------- users ----
 
@@ -289,13 +292,24 @@ CREATE TABLE IF NOT EXISTS ai_messages (
 
 CREATE INDEX IF NOT EXISTS ai_messages_conversation_idx ON ai_messages (conversation_id, created_at);
 
--- Rolling counter behind the free-tier daily quota. Cheap to check.
+-- Rolling counter behind the daily quota and the daily cost cap. Cheap to
+-- check. cost_minor is real provider spend (see pricing.costMinorForUsage),
+-- not the request count times an assumed price — a request's cost varies
+-- with how much the model actually generated.
 CREATE TABLE IF NOT EXISTS ai_usage_daily (
-  user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  usage_day DATE NOT NULL,
-  queries   INT  NOT NULL DEFAULT 0,
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  usage_day  DATE NOT NULL,
+  queries    INT  NOT NULL DEFAULT 0,
+  cost_minor INT  NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, usage_day)
 );
+-- CREATE TABLE above only shapes a fresh database, and this file does not
+-- migrate. A database created before the cost cap existed already has this
+-- table, so CREATE TABLE IF NOT EXISTS skips it silently and cost_minor
+-- never appears — and the first spend write then fails at runtime on a
+-- column that is missing. Additive and idempotent, same as the provenance
+-- enum above.
+ALTER TABLE ai_usage_daily ADD COLUMN IF NOT EXISTS cost_minor INT NOT NULL DEFAULT 0;
 
 -- --------------------------------------------------------------- credits ---
 
@@ -436,3 +450,27 @@ CREATE TABLE IF NOT EXISTS news_item_affects (
   entity_id   TEXT NOT NULL,
   PRIMARY KEY (news_id, entity_type, entity_id)
 );
+
+-- --------------------------------------------------------- submissions -----
+
+-- A visitor's claim plus the URL it is based on. Unlike the polled sources in
+-- ingest/sources.ts, nothing here can be re-fetched, so it has to persist:
+-- this table is what runIngestion() reads back to fold submissions into the
+-- same corroboration count as Reddit and YouTube. claim_key is computed with
+-- the identical ingest/pipeline.ts::claimKey() function at submit time, so
+-- two visitors describing the same thing in different words still collide.
+CREATE TABLE IF NOT EXISTS public_submissions (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  claim             TEXT NOT NULL,
+  source_url        TEXT NOT NULL,
+  -- Optional handle shown as credit. No account required to submit, so this
+  -- is free text, not a foreign key to users.
+  submitted_by      TEXT,
+  submitter_ip_hash TEXT,
+  claim_key         TEXT NOT NULL,
+  status            submission_status NOT NULL DEFAULT 'pending',
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS public_submissions_claim_key_idx ON public_submissions (claim_key);
+CREATE INDEX IF NOT EXISTS public_submissions_created_idx ON public_submissions (created_at DESC);

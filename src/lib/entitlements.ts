@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getStore } from "@/lib/db/store";
-import { PRICING } from "@/lib/pricing";
+import { DAILY_COST_CAP_MINOR, PRICING } from "@/lib/pricing";
 import type { Tier } from "@/lib/types";
 
 /**
@@ -55,10 +55,21 @@ export interface QuotaResult {
   allowed: boolean;
   used: number;
   limit: number;
-  reason?: "daily-limit" | "insufficient-credits" | "tier";
+  reason?: "daily-limit" | "insufficient-credits" | "tier" | "cost-cap";
 }
 
-/** Checks and consumes the daily AI quota. Free tier only. */
+/**
+ * Checks and consumes the daily AI quota.
+ *
+ * Two independent gates, either of which can refuse the request: the
+ * advertised request count (dailyQueries), and — for paid tiers — the real
+ * money spent so far today (DAILY_COST_CAP_MINOR). The count alone cannot
+ * bound cost, because a request that fills its max_tokens ceiling costs far
+ * more than a short one; the spend check is what actually stops a scripted
+ * user maxing every response from costing more than their subscription.
+ * Call recordUsageCost once the provider returns real usage to keep the
+ * spend side of this current.
+ */
 export async function consumeQuery(userId: string, tier: Tier): Promise<QuotaResult> {
   const limit = TIERS[tier].dailyQueries;
   const store = getStore();
@@ -67,7 +78,27 @@ export async function consumeQuery(userId: string, tier: Tier): Promise<QuotaRes
   if (used >= limit) {
     return { allowed: false, used, limit, reason: "daily-limit" };
   }
+
+  const costCapMinor = DAILY_COST_CAP_MINOR[tier];
+  if (costCapMinor !== null) {
+    const spentToday = await store.getDailySpend(userId);
+    if (spentToday >= costCapMinor) {
+      return { allowed: false, used, limit, reason: "cost-cap" };
+    }
+  }
+
   return { allowed: true, used: await store.bumpDailyQueries(userId), limit };
+}
+
+/**
+ * Records what a call to the model actually cost, in minor currency units,
+ * against the caller's daily spend total. Called after the provider returns
+ * real token usage — never estimated up front, because the whole point is
+ * that a request's cost is not knowable until the model has answered.
+ */
+export async function recordUsageCost(userId: string, costMinor: number): Promise<void> {
+  if (costMinor <= 0) return;
+  await getStore().bumpDailySpend(userId, Math.round(costMinor));
 }
 
 /** Cost in Lab Credits of each premium AI action. */

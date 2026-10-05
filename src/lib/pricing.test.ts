@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   CREDIT_PACKS,
+  DAILY_COST_CAP_MINOR,
   DISCOUNTS,
   PRICING,
   annualSaving,
+  costMinorForUsage,
   discountByCode,
   isLive,
   quote,
@@ -50,6 +52,35 @@ describe("tiers", () => {
       .join(" ")
       .toLowerCase();
     expect(copy).not.toContain("unlimited");
+  });
+});
+
+describe("daily cost cap", () => {
+  // The header comment's exact claim: a worst-case user on a paid tier never
+  // costs more in model spend than the tier charges. This is what the
+  // dailyQueries count alone cannot enforce — see entitlements.test.ts for
+  // the request-count side of the same invariant.
+  it("bounds a month of maxed-out days below what the tier charges", () => {
+    for (const tier of ["pro", "elite"] as const) {
+      const cap = DAILY_COST_CAP_MINOR[tier];
+      expect(cap).not.toBeNull();
+      expect((cap as number) * 30).toBeLessThan(PRICING[tier].monthlyMinor);
+    }
+  });
+
+  it("has no cost cap on free, which has no price to divide by", () => {
+    expect(DAILY_COST_CAP_MINOR.free).toBeNull();
+  });
+
+  it("prices usage at the same per-million rates the header comment cites", () => {
+    // $5 / million input, $25 / million output, from the file's own estimate.
+    expect(costMinorForUsage({ inputTokens: 1_000_000, outputTokens: 0 })).toBe(500);
+    expect(costMinorForUsage({ inputTokens: 0, outputTokens: 1_000_000 })).toBe(2_500);
+    expect(costMinorForUsage({ inputTokens: 0, outputTokens: 0 })).toBe(0);
+  });
+
+  it("rounds up rather than letting a fractional cost disappear", () => {
+    expect(costMinorForUsage({ inputTokens: 1, outputTokens: 0 })).toBe(1);
   });
 });
 

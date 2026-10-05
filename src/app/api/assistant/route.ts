@@ -4,7 +4,8 @@ import { z } from "zod";
 import { AiRefusalError, getAiProvider } from "@/lib/ai";
 import { getSession } from "@/lib/auth/session";
 import { getStore } from "@/lib/db/store";
-import { consumeQuery } from "@/lib/entitlements";
+import { consumeQuery, recordUsageCost } from "@/lib/entitlements";
+import { costMinorForUsage } from "@/lib/pricing";
 import { BUDGETS, rateLimit } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
@@ -49,13 +50,11 @@ export async function POST(request: Request) {
 
   const quota = await consumeQuery(userId, account.tier);
   if (!quota.allowed) {
-    return NextResponse.json(
-      {
-        error: `You have used all ${quota.limit} free queries today. Upgrade for unlimited access.`,
-        code: quota.reason,
-      },
-      { status: 402 },
-    );
+    const error =
+      quota.reason === "cost-cap"
+        ? "You have used today's model budget on this plan. It resets tomorrow — heavy days are rare, but this stops one from costing more than the subscription."
+        : `You have used all ${quota.limit} free queries today. Upgrade for unlimited access.`;
+    return NextResponse.json({ error, code: quota.reason }, { status: 402 });
   }
 
   const profile = await getStore().getProfile(userId);
@@ -69,6 +68,7 @@ export async function POST(request: Request) {
           messages: parsed.data.messages,
           profile,
           signal: request.signal,
+          onUsage: (usage) => recordUsageCost(userId, costMinorForUsage(usage)),
         })) {
           controller.enqueue(encoder.encode(chunk));
         }

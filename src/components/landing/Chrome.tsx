@@ -114,6 +114,9 @@ export function SiteFooter() {
                 <Link href="/fund" className="hover:text-ink">Fund the Lab</Link>
               </li>
               <li>
+                <Link href="/submit" className="hover:text-ink">Submit a claim</Link>
+              </li>
+              <li>
                 <Link href="/#pricing" className="hover:text-ink">Pricing</Link>
               </li>
               <li>

@@ -73,6 +73,19 @@ export const SOURCES: Source[] = [
     intervalMinutes: 60,
     note: "Creators often measure things carefully. They also repeat each other, so two videos are not two sources.",
   },
+  {
+    id: "public-submission",
+    label: "Visitor submission",
+    tier: "community",
+    ceiling: "community",
+    autoPublish: false,
+    homepage: "/submit",
+    // 0, like the Newswire: nothing polls this. A visitor submits a claim and
+    // a source URL directly, and runIngestion() reads it back from the
+    // database rather than fetching it from anywhere.
+    intervalMinutes: 0,
+    note: "Submitted by a visitor with a source URL. Counts toward corroboration the same as any other community source — two people describing the same thing independently is still two sources.",
+  },
 ];
 
 export const sourceById = (id: string) => SOURCES.find((s) => s.id === id);
